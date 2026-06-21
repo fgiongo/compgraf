@@ -89,6 +89,10 @@ const Skybox = {
     const d = this.getDarkness(t);
     return [this._lerp(120,16,d), this._lerp(126,18,d), this._lerp(140,34,d)];
   },
+  getLightDir(t) {
+    return this.getSunElevation(t) > 0 ? this.getSunDir(t) : this.getMoonDir(t);
+  },
+  getSkyColors(t) { return this._sky(t); },
 
   // ---- desenho (chame em draw, antes das luzes da cena) ----
   draw(t) {

@@ -17,12 +17,24 @@ const CYCLE_SPEED = 0.00015;
 // Controles da barra de tempo (slider + play/pause).
 let playing = true;
 let timeEl, playBtn, clockEl;
+let sceneCamera;
+
+function preload() {
+  preloadOcean();
+}
 
 function setup() {
+  setAttributes("version", 1);
   const canvas = createCanvas(windowWidth, windowHeight, WEBGL);
   canvas.parent("canvas-container");
+  pixelDensity(Math.min(displayDensity(), 2));
+
+  sceneCamera = createCamera();
+  sceneCamera.setPosition(0, -180, 520);
+  sceneCamera.lookAt(0, 0, 0);
 
   Skybox.init(); // gera as estrelas (uma vez)
+  setupOcean();
 
   setupTimeControl();
 
@@ -71,7 +83,7 @@ function draw() {
   // 2) ILUMINAÇÃO DA CENA — sincronizada com o céu.
   //    (deixe ativo se as partes dos colegas usarem material/luz)
   const L = Skybox.getLightColor(t);
-  const dir = Skybox.getSunDir(t);
+  const dir = Skybox.getLightDir(t);
   directionalLight(L[0], L[1], L[2], -dir.x, -dir.y, -dir.z);
   const A = Skybox.getAmbientColor(t);
   ambientLight(A[0], A[1], A[2]);
@@ -79,7 +91,15 @@ function draw() {
   // 3) PARTES DOS COLEGAS — desenhem o oceano, objetos, etc. aqui.
   //    Dica: usem push()/pop() em volta de cada parte para isolar
   //    transformações e estilos.
-  // ...
+  drawOcean({
+    waveTime: millis() / 1000,
+    camera: sceneCamera,
+    lightDirection: dir,
+    lightColor: L,
+    ambientColor: A,
+    sky: Skybox.getSkyColors(t),
+    darkness: Skybox.getDarkness(t),
+  });
 }
 
 function updateClock() {
