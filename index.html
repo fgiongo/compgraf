@@ -10,7 +10,15 @@
     <main id="canvas-container" aria-label="Demonstração 3D de um oceano"></main>
     <div class="spinner" role="status" aria-label="Carregando"></div>
 
+    <div class="time-control">
+      <button id="play" aria-label="Pausar ciclo">❚❚</button>
+      <input type="range" id="time" min="0" max="1000" value="120"
+             aria-label="Hora do dia" />
+      <span id="clock">06:00</span>
+    </div>
+
     <script src="vendor/p5/p5.min.js"></script>
+    <script src="skybox.js"></script>
     <script src="index.js"></script>
   </body>
 </html>

@@ -18,6 +18,63 @@ canvas {
   height: 100%;
 }
 
+.time-control {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgb(12 14 22 / 55%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  backdrop-filter: blur(8px);
+  color: #e8e6df;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.time-control button {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgb(255 255 255 / 15%);
+  background: rgb(255 255 255 / 8%);
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.time-control button:hover {
+  background: rgb(255 255 255 / 16%);
+}
+
+.time-control input[type="range"] {
+  width: min(46vw, 360px);
+  height: 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  accent-color: #f7c98a;
+  background: linear-gradient(
+    90deg,
+    #1b2247,
+    #4a6fb0,
+    #cfe0f5,
+    #f7c98a,
+    #e07a4a,
+    #2a2150
+  );
+}
+
+.time-control #clock {
+  min-width: 46px;
+  text-align: center;
+  font-size: 13px;
+}
+
 .spinner {
   position: fixed;
   top: 50%;
