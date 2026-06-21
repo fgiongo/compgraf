@@ -483,7 +483,7 @@ gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(worldPosition, 1.0);
 ```mermaid
 flowchart TB
     JS["Aplicação p5.js"]
-    U1["uWaveTime"]
+    U1["uWaveTime<br/>uWaveAmplitude"]
     U2["uCameraPosition"]
     U3["uLightDirection<br/>uLightColor<br/>uAmbientColor"]
     U5["uSkyTop<br/>uSkyHorizon<br/>uDarkness"]
@@ -508,6 +508,7 @@ As interfaces planejadas são:
 | Dado | Origem | Destino | Finalidade |
 | --- | --- | --- | --- |
 | `uWaveTime` | `millis() / 1000` | Ambos | Propagar ondas e animar ruído independentemente de `t`. |
+| `uWaveAmplitude` | Controle de amplitude, de 0 a 2 | Ambos | Escalar o deslocamento, as tangentes, as cristas e as ondulações procedurais. |
 | `uCameraPosition` | `sceneCamera.eyeX/Y/Z` | Fragment | Calcular \(\mathbf{V}\), Fresnel e nível de detalhe. |
 | `uLightDirection` | `Skybox.getLightDir(t)` | Fragment | Direção até o corpo celeste ativo. |
 | `uLightColor` | `Skybox.getLightColor(t)` | Fragment | Cor e intensidade do Sol ou da Lua. |
@@ -520,7 +521,7 @@ As interfaces planejadas são:
 | Tangentes de mundo | Vertex | Fragment | Construir a base para o gradiente procedural. |
 | Altura/inclinação | Vertex | Fragment | Variação cromática e cristas. |
 
-Os parâmetros das seis ondas ficam como literais nas seis chamadas de `addWave` do vertex shader. Isso evita arrays pouco portáveis em GLSL ES 1.00. Se a cena precisar mudar o estado do mar em tempo real, os parâmetros poderão migrar para uniformes individuais.
+Os parâmetros relativos das seis ondas ficam como literais nas seis chamadas de `addWave` do vertex shader. Isso evita arrays pouco portáveis em GLSL ES 1.00. O controle de interface altera apenas `uWaveAmplitude`, um multiplicador comum que preserva as proporções entre as ondas. O intervalo de 0% a 200% permite comparar uma superfície plana, a configuração original e ondas com o dobro do deslocamento.
 
 As saídas serão empacotadas em cinco vetores `varying`: posição, normal, tangente X, tangente Z e um `vec2` com altura e intensidade de crista. Isso permanece dentro do mínimo de oito vetores `vec4` garantido por WebGL1. Todos serão renormalizados ou reinterpretados no fragment shader após a interpolação.
 
@@ -533,6 +534,8 @@ Atualmente, `index.js` combina `Skybox.getLightColor(t)`, que troca para luar à
 O `orbitControl()` existente continuará responsável pela interação. Durante `setup()`, a aplicação armazenará a câmera ativa em `sceneCamera` para que sua posição atualizada possa ser enviada ao shader a cada quadro. O oceano não criará um segundo controle de câmera.
 
 O parâmetro global `t` pertence exclusivamente ao ciclo dia/noite. Pausar ou arrastar o controle de horário não pausa as ondas, pois `uWaveTime` é derivado separadamente de `millis()`. O método público `getSkyColors(t)` compartilha as cores sem expor `_sky(t)`.
+
+O controle “Amplitude” atualiza `uWaveAmplitude` durante a animação e mostra o valor em porcentagem. O valor inicial de 100% reproduz as amplitudes da tabela da Seção 7; 0% remove o deslocamento geométrico, as ondulações procedurais e a contribuição cromática das cristas.
 
 O oceano será desenhado dentro de `push()`/`pop()`, aplicando `shader(oceanShader)` e `model(oceanGeometry)`. Depois dele, `resetShader()` evitará que o shader da água afete objetos desenhados por outros integrantes. O raio atual da cúpula é 1900; a metade da diagonal do plano oceânico é aproximadamente 1697 metros, portanto a grade de 2400 metros permanece dentro do céu. A posição da cena deverá preservar essa relação.
 
@@ -581,6 +584,7 @@ O plano não é realmente infinito. Seu tamanho e a câmera deverão ocultar as 
 - Sol ou Lua atrás da superfície: ausência de brilho especular inválido.
 - Ciclo completo: reflexo, corpo celeste, luz ambiente e tonalidade da água acompanham `t`.
 - Controle de horário pausado: céu para, mas `uWaveTime` e as ondas continuam avançando.
+- Controle de amplitude: 0% produz uma superfície plana, 100% preserva os valores originais e 200% duplica o deslocamento sem erros no console.
 - Redimensionamento: perspectiva, resolução e canvas atualizados.
 - Longa execução: ausência de saltos, cintilação excessiva ou perda perceptível de precisão.
 - Contexto WebGL1: shaders GLSL ES 1.00 compilam sem erros e a cúpula existente permanece visível.

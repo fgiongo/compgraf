@@ -5,6 +5,7 @@ attribute vec3 aPosition;
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
 uniform float uWaveTime;
+uniform float uWaveAmplitude;
 
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
@@ -38,20 +39,23 @@ void addWave(
   float q = steepness / (WAVE_COUNT * k * amplitude);
   float slope = q * k * amplitude;
   float verticalSlope = k * amplitude;
+  float scaledAmplitude = amplitude * uWaveAmplitude;
+  float scaledSlope = slope * uWaveAmplitude;
+  float scaledVerticalSlope = verticalSlope * uWaveAmplitude;
 
-  position.x += q * amplitude * direction.x * waveCos;
-  position.y += amplitude * waveSin;
-  position.z += q * amplitude * direction.y * waveCos;
+  position.x += q * scaledAmplitude * direction.x * waveCos;
+  position.y += scaledAmplitude * waveSin;
+  position.z += q * scaledAmplitude * direction.y * waveCos;
 
-  tangentX.x -= slope * direction.x * direction.x * waveSin;
-  tangentX.y += verticalSlope * direction.x * waveCos;
-  tangentX.z -= slope * direction.x * direction.y * waveSin;
+  tangentX.x -= scaledSlope * direction.x * direction.x * waveSin;
+  tangentX.y += scaledVerticalSlope * direction.x * waveCos;
+  tangentX.z -= scaledSlope * direction.x * direction.y * waveSin;
 
-  tangentZ.x -= slope * direction.x * direction.y * waveSin;
-  tangentZ.y += verticalSlope * direction.y * waveCos;
-  tangentZ.z -= slope * direction.y * direction.y * waveSin;
+  tangentZ.x -= scaledSlope * direction.x * direction.y * waveSin;
+  tangentZ.y += scaledVerticalSlope * direction.y * waveCos;
+  tangentZ.z -= scaledSlope * direction.y * direction.y * waveSin;
 
-  crest += max(waveSin, 0.0) * steepness;
+  crest += max(waveSin, 0.0) * steepness * uWaveAmplitude;
 }
 
 vec3 toP5(vec3 vector) {
