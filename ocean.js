@@ -50,6 +50,7 @@ function drawOcean(scene) {
   shader(oceanShader);
 
   oceanShader.setUniform("uWaveTime", scene.waveTime);
+  oceanShader.setUniform("uWaveAmplitude", scene.waveAmplitude);
   oceanShader.setUniform("uCameraPosition", cameraPosition(scene.camera));
   oceanShader.setUniform("uLightDirection", vectorArray(scene.lightDirection));
   oceanShader.setUniform("uLightColor", normalizedColor(scene.lightColor));

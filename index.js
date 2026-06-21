@@ -17,6 +17,7 @@ const CYCLE_SPEED = 0.00015;
 // Controles da barra de tempo (slider + play/pause).
 let playing = true;
 let timeEl, playBtn, clockEl;
+let waveAmplitude = 1;
 let sceneCamera;
 
 function preload() {
@@ -36,12 +37,17 @@ function setup() {
   Skybox.init(); // gera as estrelas (uma vez)
   setupOcean();
 
-  setupTimeControl();
+  setupControls();
 
   // --- SETUP DOS COLEGAS (carregar/gerar geometria, texturas, etc.) ---
   // ...
 
   document.querySelector(".spinner")?.remove();
+}
+
+function setupControls() {
+  setupTimeControl();
+  setupAmplitudeControl();
 }
 
 function setupTimeControl() {
@@ -58,6 +64,16 @@ function setupTimeControl() {
   });
 
   playBtn.addEventListener("click", () => setPlaying(!playing));
+}
+
+function setupAmplitudeControl() {
+  const amplitudeEl = document.getElementById("wave-amplitude");
+  const amplitudeValueEl = document.getElementById("wave-amplitude-value");
+
+  amplitudeEl.addEventListener("input", () => {
+    waveAmplitude = Number(amplitudeEl.value) / 100;
+    amplitudeValueEl.value = `${amplitudeEl.value}%`;
+  });
 }
 
 function setPlaying(on) {
@@ -93,6 +109,7 @@ function draw() {
   //    transformações e estilos.
   drawOcean({
     waveTime: millis() / 1000,
+    waveAmplitude,
     camera: sceneCamera,
     lightDirection: dir,
     lightColor: L,

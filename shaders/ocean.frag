@@ -1,6 +1,7 @@
 precision highp float;
 
 uniform float uWaveTime;
+uniform float uWaveAmplitude;
 uniform vec3 uCameraPosition;
 uniform vec3 uLightDirection;
 uniform vec3 uLightColor;
@@ -75,7 +76,7 @@ void main() {
     bitangent = -bitangent;
   }
 
-  vec2 gradient = rippleGradient(vWorldPosition.xz, distanceToCamera);
+  vec2 gradient = rippleGradient(vWorldPosition.xz, distanceToCamera) * uWaveAmplitude;
   normal = normalize(normal - gradient.x * tangent - gradient.y * bitangent);
 
   vec3 lightDirection = normalize(uLightDirection);
