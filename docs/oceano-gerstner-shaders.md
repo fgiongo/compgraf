@@ -14,7 +14,7 @@ Ao final, deve ser possível explicar:
 - como Fresnel, reflexão do céu e brilho do Sol ou da Lua dão aparência de água;
 - quais simplificações separam este método de uma simulação física completa.
 
-> **Estado do projeto:** este documento especifica uma implementação futura. Os resultados visuais e de desempenho descritos aqui são metas e ainda precisam ser medidos.
+> **Estado do projeto:** este documento acompanha a primeira implementação em `ocean.js` e `shaders/ocean.vert`/`ocean.frag`. Os resultados visuais e de desempenho ainda precisam ser medidos em navegadores e máquinas representativos.
 
 ## Sumário
 
@@ -75,7 +75,7 @@ $$
 \mathbf{p}_0 = (x, 0, z).
 $$
 
-O p5.js usa, por padrão, um eixo vertical orientado para baixo. A implementação deverá manter as equações no sistema matemático acima e representar a conversão para o mundo do p5.js explicitamente por uma matriz `uOceanToWorld`. Essa matriz transforma \((x,y,z)\) do oceano em \((x,-y,z)\) no mundo p5.js, além de qualquer translação necessária. A matriz normal correspondente, `uOceanNormalMatrix`, será a inversa transposta da parte linear dessa transformação. Como a inversão de \(y\) troca a orientação dos triângulos, a geometria será construída com a ordem de índices correspondente à face superior; essa ordem será confirmada pelo teste de normais da Seção 14. Misturar as duas convenções dentro das fórmulas tornaria sinais, produtos vetoriais e iluminação difíceis de verificar.
+O p5.js usa, por padrão, um eixo vertical orientado para baixo. A implementação mantém as equações no sistema matemático acima e usa uma função curta `toP5()` no vertex shader para converter \((x,y,z)\) em \((x,-y,z)\). A primeira versão desenha o oceano na origem, sem translação, rotação ou escala p5.js adicional. Como a inversão de \(y\) troca a orientação dos triângulos, a geometria é construída com a ordem de índices correspondente à face superior. Misturar as duas convenções dentro das fórmulas tornaria sinais, produtos vetoriais e iluminação difíceis de verificar.
 
 Quatro espaços precisam permanecer distintos:
 
@@ -84,7 +84,7 @@ Quatro espaços precisam permanecer distintos:
 - **espaço de visão:** mundo observado pela câmera;
 - **espaço de recorte:** resultado usado pela rasterização após a projeção.
 
-As posições são transformadas com coordenadas homogêneas, usando \(w=1\). Direções usam \(w=0\), pois não devem receber translação. Normais usam a matriz inversa transposta. Isso continua necessário quando há reflexão de eixo ou escala não uniforme.
+As posições são transformadas com coordenadas homogêneas, usando \(w=1\). Direções usam \(w=0\), pois não devem receber translação. Se uma versão futura aplicar transformações de modelo ao oceano, posições e vetores deverão ser convertidos para mundo, e normais deverão usar a matriz inversa transposta.
 
 > **Erro comum:** calcular a luz em espaço de mundo usando uma normal que ainda está em espaço local. Todos os vetores de uma operação de produto escalar precisam estar no mesmo espaço.
 
@@ -179,8 +179,10 @@ Os parâmetros iniciais planejados são:
 
 Esses valores são pontos de partida, não resultados calibrados. Todos atendem ao mínimo de oito segmentos por comprimento de onda. As fases iniciais serão constantes determinísticas para que a cena seja reproduzível.
 
+O trecho abaixo omite os parâmetros de tangentes e crista para destacar apenas o deslocamento:
+
 ```glsl
-void accumulateWave(
+void addWave(
   vec2 direction,
   float wavelength,
   float amplitude,
@@ -198,15 +200,15 @@ void accumulateWave(
   displaced.y += amplitude * sin(theta);
 }
 
-accumulateWave(vec2(0.9781,  0.2079), 420.0, 8.0, 0.38, 0.0, xz, displaced);
-accumulateWave(vec2(0.9848, -0.1736), 300.0, 5.0, 0.32, 1.1, xz, displaced);
-accumulateWave(vec2(0.8829,  0.4695), 220.0, 3.2, 0.28, 2.4, xz, displaced);
-accumulateWave(vec2(0.9272, -0.3746), 170.0, 2.0, 0.22, 0.7, xz, displaced);
-accumulateWave(vec2(0.8192,  0.5736), 135.0, 1.2, 0.16, 3.2, xz, displaced);
-accumulateWave(vec2(0.8480, -0.5299), 120.0, 0.7, 0.10, 5.1, xz, displaced);
+addWave(vec2(0.9781,  0.2079), 420.0, 8.0, 0.38, 0.0, xz, displaced);
+addWave(vec2(0.9848, -0.1736), 300.0, 5.0, 0.32, 1.1, xz, displaced);
+addWave(vec2(0.8829,  0.4695), 220.0, 3.2, 0.28, 2.4, xz, displaced);
+addWave(vec2(0.9272, -0.3746), 170.0, 2.0, 0.22, 0.7, xz, displaced);
+addWave(vec2(0.8192,  0.5736), 135.0, 1.2, 0.16, 3.2, xz, displaced);
+addWave(vec2(0.8480, -0.5299), 120.0, 0.7, 0.10, 5.1, xz, displaced);
 ```
 
-Na implementação, a mesma função também acumulará as derivadas de \(\mathbf{T}_x\) e \(\mathbf{T}_z\) apresentadas na próxima seção. As chamadas explícitas são intencionais para manter compatibilidade previsível com compiladores GLSL ES 1.00.
+No shader completo, a mesma função recebe parâmetros `inout` adicionais e acumula as derivadas de \(\mathbf{T}_x\), \(\mathbf{T}_z\) e a intensidade da crista. As chamadas explícitas são intencionais para manter compatibilidade previsível com compiladores GLSL ES 1.00.
 
 > **Interpretação visual:** amplitude aumenta a altura; comprimento aumenta a distância entre cristas; direção muda o fluxo aparente; inclinação concentra a forma perto das cristas; fase altera apenas o ponto inicial do ciclo.
 
@@ -266,12 +268,12 @@ A ordem do produto vetorial importa: invertê-la produz uma normal voltada para 
 
 ```glsl
 vec3 normalLocal = normalize(cross(tangentZ, tangentX));
-vec3 normalWorld = normalize(uOceanNormalMatrix * normalLocal);
-vec3 tangentXWorld = normalize(uOceanLinearMatrix * tangentX);
-vec3 tangentZWorld = normalize(uOceanLinearMatrix * tangentZ);
+vec3 normalWorld = normalize(toP5(normalLocal));
+vec3 tangentXWorld = normalize(toP5(tangentX));
+vec3 tangentZWorld = normalize(toP5(tangentZ));
 ```
 
-O p5.js fornece matrizes internas com nomes como `uModelMatrix`, mas a conversão de eixos do oceano será mantida em uniformes próprios para tornar a convenção explícita. Caso uma matriz de modelo do p5.js seja incorporada, ela deverá participar tanto de `uOceanToWorld` quanto do cálculo inverso transposto de `uOceanNormalMatrix`.
+Essa conversão direta é válida porque a malha permanece na origem e não recebe uma transformação de modelo adicional. A projeção final usa `uModelViewMatrix` e `uProjectionMatrix`, fornecidas automaticamente pelo p5.js.
 
 Após a rasterização, todos os vetores interpolados perdem comprimento unitário. O fragment shader deverá normalizar novamente a normal e reconstruir uma base ortonormal por Gram–Schmidt:
 
@@ -333,7 +335,7 @@ $$
 
 onde \(M\) é o número de oitavas, \(p\) é a persistência, \(l\) é a lacunaridade e \(\mathbf{v}_j\) controla a animação. Serão usadas três oitavas, amplitude inicial \(a_0=0{,}5\) metro, frequência inicial \(f_0=1/30\,\text{m}^{-1}\), lacunaridade \(l=2\) e persistência \(p=0{,}5\). As escalas características serão, portanto, 30, 15 e 7,5 metros. Direções de movimento ligeiramente diferentes reduzem a aparência de uma textura deslizando rigidamente.
 
-Em vez de diferenças finitas, cada avaliação do ruído retornará seu valor e as duas derivadas analíticas. As derivadas são obtidas durante a interpolação dos quatro valores da célula usando \(f'(u)\). Pela regra da cadeia, o gradiente do fBm é:
+Em vez de diferenças finitas, cada avaliação calcula diretamente as duas derivadas analíticas necessárias. As derivadas são obtidas durante a interpolação dos quatro valores da célula usando \(f'(u)\). Pela regra da cadeia, o gradiente do fBm é:
 
 $$
 \nabla h(\mathbf{x},t)
@@ -400,7 +402,7 @@ Mesmo com \(F_0\) pequeno, o termo de quinta potência faz \(F\) se aproximar de
 
 ### 10.3 Céu compartilhado e brilho celeste
 
-Na primeira versão não haverá um mapa de ambiente. A cor refletida será obtida da mesma paleta interpolada usada pela cúpula existente. Para não acessar o método privado `Skybox._sky(t)`, a integração adicionará um método público `Skybox.getSkyColors(t)`, que retornará `{ top, bot }`. Esses valores serão normalizados de 0–255 para 0–1 e enviados como `uSkyTop` e `uSkyHorizon`.
+Na primeira versão não há um mapa de ambiente. A cor refletida é obtida da mesma paleta interpolada usada pela cúpula existente. Para não acessar o método privado `Skybox._sky(t)`, o método público `Skybox.getSkyColors(t)` retorna `{ top, bot }`. Esses valores são normalizados de 0–255 para 0–1 e enviados como `uSkyTop` e `uSkyHorizon`.
 
 O shader selecionará a cor pela componente vertical de \(\mathbf{R}\), respeitando que o alto da cena p5.js possui \(y<0\). Direções refletidas abaixo do horizonte serão limitadas à cor do horizonte, evitando um céu invertido. Uma contribuição concentrada para o Sol ou a Lua será calculada por:
 
@@ -457,7 +459,7 @@ Os arquivos de shader continuarão sendo recursos do sketch p5.js e serão carre
 
 ```javascript
 function preload() {
-  Ocean.preload(); // internamente usa loadShader(vertPath, fragPath)
+  preloadOcean(); // internamente usa loadShader(vertPath, fragPath)
 }
 
 function setup() {
@@ -467,13 +469,13 @@ function setup() {
 }
 ```
 
-`Ocean` será um módulo JavaScript no mesmo estilo do objeto `Skybox`, com `preload()`, `init()` e `draw(sceneState)`. Seus métodos usarão apenas funções e classes públicas do p5.js.
+O arquivo `ocean.js` expõe apenas as funções globais `preloadOcean()`, `setupOcean()` e `drawOcean(scene)`. Essa organização acompanha o ciclo de vida do p5.js sem introduzir uma classe ou hierarquia desnecessária.
 
-GLSL ES 1.00 possui restrições de inicialização e indexação de arrays. As seis ondas serão aplicadas por seis chamadas explícitas a uma função `accumulateWave(...)`, em vez de arrays constantes indexados por um laço. As matrizes internas utilizadas serão `uViewMatrix` e `uProjectionMatrix`. A posição local será convertida por `uOceanToWorld` antes dessas matrizes:
+GLSL ES 1.00 possui restrições de inicialização e indexação de arrays. As seis ondas são aplicadas por seis chamadas explícitas a uma função `addWave(...)`, em vez de arrays constantes indexados por um laço. As matrizes internas utilizadas são `uModelViewMatrix` e `uProjectionMatrix`. A posição é convertida para os eixos p5.js antes da projeção:
 
 ```glsl
-vec4 worldPosition = uOceanToWorld * vec4(displacedLocal, 1.0);
-gl_Position = uProjectionMatrix * uViewMatrix * worldPosition;
+vec3 worldPosition = toP5(displacedLocal);
+gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(worldPosition, 1.0);
 ```
 
 ### 11.2 Interface de dados
@@ -484,7 +486,6 @@ flowchart TB
     U1["uWaveTime"]
     U2["uCameraPosition"]
     U3["uLightDirection<br/>uLightColor<br/>uAmbientColor"]
-    U4["uOceanToWorld<br/>uOceanLinearMatrix<br/>uOceanNormalMatrix"]
     U5["uSkyTop<br/>uSkyHorizon<br/>uDarkness"]
     V["Vertex shader"]
     I["Saídas interpoladas<br/>posição, normal, tangentes,<br/>altura e crista"]
@@ -493,13 +494,11 @@ flowchart TB
     JS --> U1
     JS --> U2
     JS --> U3
-    JS --> U4
     JS --> U5
     U1 --> V
     U1 --> F
     U2 --> F
     U3 --> F
-    U4 --> V
     U5 --> F
     V --> I --> F
 ```
@@ -510,21 +509,18 @@ As interfaces planejadas são:
 | --- | --- | --- | --- |
 | `uWaveTime` | `millis() / 1000` | Ambos | Propagar ondas e animar ruído independentemente de `t`. |
 | `uCameraPosition` | `sceneCamera.eyeX/Y/Z` | Fragment | Calcular \(\mathbf{V}\), Fresnel e nível de detalhe. |
-| `uLightDirection` | `Skybox.getSunDir/getMoonDir` | Fragment | Direção até o corpo celeste ativo. |
+| `uLightDirection` | `Skybox.getLightDir(t)` | Fragment | Direção até o corpo celeste ativo. |
 | `uLightColor` | `Skybox.getLightColor(t)` | Fragment | Cor e intensidade do Sol ou da Lua. |
 | `uAmbientColor` | `Skybox.getAmbientColor(t)` | Fragment | Espalhamento aproximado na água. |
 | `uSkyTop/uSkyHorizon` | `Skybox.getSkyColors(t)` | Fragment | Reflexo coerente com a cúpula visível. |
 | `uDarkness` | `Skybox.getDarkness(t)` | Fragment | Ajustar contraste e cor noturna. |
 | Matrizes de visão/projeção | p5.js | Vertex | Projetar a posição de mundo. |
-| Transformação do oceano | JavaScript | Vertex | Converter e posicionar a malha local. |
-| Parte linear da transformação | JavaScript | Vertex | Transformar vetores tangentes sem translação. |
-| Matriz normal do oceano | JavaScript | Vertex | Transformar normais corretamente. |
 | Posição de mundo | Vertex | Fragment | Ruído, câmera e iluminação. |
 | Normal de mundo | Vertex | Fragment | Base para a normal detalhada. |
 | Tangentes de mundo | Vertex | Fragment | Construir a base para o gradiente procedural. |
 | Altura/inclinação | Vertex | Fragment | Variação cromática e cristas. |
 
-Os parâmetros das seis ondas ficarão inicialmente como literais nas seis chamadas de `accumulateWave` do vertex shader. Isso evita arrays pouco portáveis em GLSL ES 1.00. Se a cena precisar mudar o estado do mar em tempo real, os parâmetros poderão migrar para uniformes individuais.
+Os parâmetros das seis ondas ficam como literais nas seis chamadas de `addWave` do vertex shader. Isso evita arrays pouco portáveis em GLSL ES 1.00. Se a cena precisar mudar o estado do mar em tempo real, os parâmetros poderão migrar para uniformes individuais.
 
 As saídas serão empacotadas em cinco vetores `varying`: posição, normal, tangente X, tangente Z e um `vec2` com altura e intensidade de crista. Isso permanece dentro do mínimo de oito vetores `vec4` garantido por WebGL1. Todos serão renormalizados ou reinterpretados no fragment shader após a interpolação.
 
@@ -536,7 +532,7 @@ Atualmente, `index.js` combina `Skybox.getLightColor(t)`, que troca para luar à
 
 O `orbitControl()` existente continuará responsável pela interação. Durante `setup()`, a aplicação armazenará a câmera ativa em `sceneCamera` para que sua posição atualizada possa ser enviada ao shader a cada quadro. O oceano não criará um segundo controle de câmera.
 
-O parâmetro global `t` continuará pertencendo exclusivamente ao ciclo dia/noite. Pausar ou arrastar o controle de horário não pausará as ondas, pois `uWaveTime` será derivado separadamente de `millis()`. Para compartilhar as cores sem acessar `_sky(t)`, `skybox.js` ganhará apenas o método público `getSkyColors(t)`, que delegará à interpolação já existente.
+O parâmetro global `t` pertence exclusivamente ao ciclo dia/noite. Pausar ou arrastar o controle de horário não pausa as ondas, pois `uWaveTime` é derivado separadamente de `millis()`. O método público `getSkyColors(t)` compartilha as cores sem expor `_sky(t)`.
 
 O oceano será desenhado dentro de `push()`/`pop()`, aplicando `shader(oceanShader)` e `model(oceanGeometry)`. Depois dele, `resetShader()` evitará que o shader da água afete objetos desenhados por outros integrantes. O raio atual da cúpula é 1900; a metade da diagonal do plano oceânico é aproximadamente 1697 metros, portanto a grade de 2400 metros permanece dentro do céu. A posição da cena deverá preservar essa relação.
 
@@ -635,6 +631,6 @@ Essas limitações devem ser apresentadas no seminário. Realismo gráfico não 
 - **Uniform:** valor constante durante uma chamada de desenho.
 - **Varying:** valor produzido por vértice e interpolado para cada fragmento.
 
-## 18. Critério para iniciar a implementação
+## 18. Critério de alinhamento da implementação
 
-A implementação poderá começar quando as convenções de coordenadas, os parâmetros das ondas e as interfaces com câmera e `Skybox` estiverem aprovados. Todo o código deverá permanecer no ciclo de vida e nas abstrações do p5.js, usando GLSL ES 1.00 apenas por meio de `p5.Shader`. O desenvolvimento seguirá a construção incremental da Seção 14, permitindo comparar cada etapa com a formulação deste documento. Qualquer divergência deliberada entre metodologia e código deverá ser registrada aqui, mantendo o material útil para a apresentação final.
+A implementação deve preservar as convenções de coordenadas, os parâmetros das ondas e as interfaces com câmera e `Skybox` descritas neste documento. Todo o código permanece no ciclo de vida e nas abstrações do p5.js, usando GLSL ES 1.00 por meio de `p5.Shader`. A validação seguirá a construção incremental da Seção 14. Qualquer divergência deliberada entre metodologia e código deverá ser registrada aqui, mantendo o material útil para a apresentação final.
