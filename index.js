@@ -22,6 +22,7 @@ let sceneCamera;
 
 function preload() {
   preloadOcean();
+  preloadBoat();
 }
 
 function setup() {
@@ -36,11 +37,9 @@ function setup() {
 
   Skybox.init(); // gera as estrelas (uma vez)
   setupOcean();
+  setupBoat();
 
   setupControls();
-
-  // --- SETUP DOS COLEGAS (carregar/gerar geometria, texturas, etc.) ---
-  // ...
 
   document.querySelector(".spinner")?.remove();
 }
@@ -56,20 +55,22 @@ function setupTimeControl() {
   clockEl = document.getElementById("clock");
 
   timeEl.value = Math.round(t * 1000);
-
   // arrastar o slider define o tempo e pausa o avanço automático
   timeEl.addEventListener("input", () => {
     t = (+timeEl.value) / 1000;
     setPlaying(false);
   });
 
+  // Alterna entre play e pause do ciclo do céu.
   playBtn.addEventListener("click", () => setPlaying(!playing));
 }
 
 function setupAmplitudeControl() {
+  // Captura os elementos HTML usados pelo controle das ondas.
   const amplitudeEl = document.getElementById("wave-amplitude");
   const amplitudeValueEl = document.getElementById("wave-amplitude-value");
 
+  // Sempre que o slider muda, salvamos a nova amplitude.
   amplitudeEl.addEventListener("input", () => {
     waveAmplitude = Number(amplitudeEl.value) / 100;
     amplitudeValueEl.value = `${amplitudeEl.value}%`;
@@ -77,55 +78,86 @@ function setupAmplitudeControl() {
 }
 
 function setPlaying(on) {
+  // Salva se a animação automática do céu está ligada ou desligada.
   playing = on;
+
+  // Troca o símbolo do botão.
   playBtn.textContent = on ? "❚❚" : "▶";
+
+  // Atualiza a descrição acessível do botão.
   playBtn.setAttribute("aria-label", on ? "Pausar ciclo" : "Reproduzir ciclo");
 }
 
 function draw() {
-  // avança o ciclo dia/noite (0..1, volta ao início) quando não está pausado
+  // Se o modo automático estiver ligado, avançamos o tempo do céu.
   if (playing) {
     t = (t + CYCLE_SPEED) % 1;
     timeEl.value = Math.round(t * 1000);
   }
+
+  // Atualiza o relógio mostrado na interface.
   updateClock();
 
+  // Limpa o frame atual.
   background(0);
-  orbitControl(1.1, 1.1, 0.08); // arraste para olhar ao redor
 
-  // 1) CÉU — desenhado primeiro, sem luzes (cor por vértice).
+  // Permite girar a câmera com o mouse.
+  orbitControl(1.1, 1.1, 0.08);
+
+  // Desenha o céu antes do resto da cena.
   Skybox.draw(t);
 
-  // 2) ILUMINAÇÃO DA CENA — sincronizada com o céu.
-  //    (deixe ativo se as partes dos colegas usarem material/luz)
-  const L = Skybox.getLightColor(t);
-  const dir = Skybox.getLightDir(t);
-  directionalLight(L[0], L[1], L[2], -dir.x, -dir.y, -dir.z);
-  const A = Skybox.getAmbientColor(t);
-  ambientLight(A[0], A[1], A[2]);
+  // Busca a luz principal de acordo com a hora do dia.
+  const lightColor = Skybox.getLightColor(t);
+  const lightDirection = Skybox.getLightDir(t);
 
-  // 3) PARTES DOS COLEGAS — desenhem o oceano, objetos, etc. aqui.
-  //    Dica: usem push()/pop() em volta de cada parte para isolar
-  //    transformações e estilos.
-  drawOcean({
+  // Ativa a luz direcional da cena.
+  directionalLight(lightColor[0], lightColor[1], lightColor[2], -lightDirection.x, -lightDirection.y, -lightDirection.z);
+
+  // Busca a cor da luz ambiente de acordo com o céu.
+  const ambientColor = Skybox.getAmbientColor(t);
+
+  // Ativa a luz ambiente da cena.
+  ambientLight(ambientColor[0], ambientColor[1], ambientColor[2]);
+
+  // Empacota os dados da cena que serão reutilizados por outros módulos.
+  const scene = {
     waveTime: millis() / 1000,
     waveAmplitude,
     camera: sceneCamera,
-    lightDirection: dir,
-    lightColor: L,
-    ambientColor: A,
+    lightDirection,
+    lightColor,
+    ambientColor,
+  };
+
+  // Desenha a água do oceano.
+  drawOcean({
+    waveTime: scene.waveTime,
+    waveAmplitude: scene.waveAmplitude,
+    camera: scene.camera,
+    lightDirection: scene.lightDirection,
+    lightColor: scene.lightColor,
+    ambientColor: scene.ambientColor,
     sky: Skybox.getSkyColors(t),
     darkness: Skybox.getDarkness(t),
   });
+
+  drawBoat(scene);
 }
 
 function updateClock() {
+  // Converte o parâmetro t para um horário entre 05:00 e 21:00.
   const mins = Math.round(map(t, 0, 1, 5 * 60, 21 * 60));
+
+  // Monta horas e minutos com dois dígitos.
   const hh = String(Math.floor(mins / 60)).padStart(2, "0");
   const mm = String(mins % 60).padStart(2, "0");
+
+  // Atualiza o relógio da interface.
   clockEl.textContent = `${hh}:${mm}`;
 }
 
 function windowResized() {
+  // Mantém o canvas ocupando a janela toda.
   resizeCanvas(windowWidth, windowHeight);
 }
