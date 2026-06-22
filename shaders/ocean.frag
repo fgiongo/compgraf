@@ -10,6 +10,14 @@ uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform float uDarkness;
 
+// Mascara de footprint: textura com a silhueta do casco vista de cima.
+// Recortamos a agua onde ela cai dentro da silhueta, mapeando a posicao XZ do
+// fragmento para a UV da textura.
+uniform float uBoatFootprintEnabled;
+uniform sampler2D uBoatFootprintTex;
+uniform vec2 uBoatFootprintCenter;
+uniform vec2 uBoatFootprintHalfExtent;
+
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying vec3 vTangentX;
@@ -65,6 +73,19 @@ vec3 toneMap(vec3 color) {
 }
 
 void main() {
+  // Recorte pela silhueta real do casco (vista de cima): a malha do mar nao
+  // aparece atravessando o modelo 3D.
+  if (uBoatFootprintEnabled > 0.5) {
+    vec2 footprintUv =
+      (vWorldPosition.xz - uBoatFootprintCenter) / (2.0 * uBoatFootprintHalfExtent) + 0.5;
+    if (all(greaterThan(footprintUv, vec2(0.0))) && all(lessThan(footprintUv, vec2(1.0)))) {
+      float inside = texture2D(uBoatFootprintTex, footprintUv).r;
+      if (inside > 0.5) {
+        discard;
+      }
+    }
+  }
+
   vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
   float distanceToCamera = length(uCameraPosition - vWorldPosition);
 

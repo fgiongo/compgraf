@@ -59,9 +59,35 @@ function drawOcean(scene) {
   oceanShader.setUniform("uSkyHorizon", normalizedColor(sky.bot));
   oceanShader.setUniform("uDarkness", scene.darkness);
 
+  setBoatMaskUniforms(scene);
+
   model(oceanGeometry);
   resetShader();
   pop();
+}
+
+function setBoatMaskUniforms(scene) {
+  // sampleOceanSurface, BOAT_POSITION e a mascara de footprint vivem em boat.js
+  // (mesmo escopo global). center segue a deriva horizontal do barco na agua.
+  const footprintEnabled = Boolean(boatFootprintMask);
+  oceanShader.setUniform("uBoatFootprintEnabled", footprintEnabled ? 1 : 0);
+  if (!footprintEnabled) {
+    return;
+  }
+
+  const center = sampleOceanSurface(
+    BOAT_POSITION.x,
+    BOAT_POSITION.z,
+    scene.waveTime,
+    scene.waveAmplitude
+  );
+
+  oceanShader.setUniform("uBoatFootprintTex", boatFootprintMask);
+  oceanShader.setUniform("uBoatFootprintCenter", [center.x, center.z]);
+  oceanShader.setUniform("uBoatFootprintHalfExtent", [
+    boatFootprintHalfX,
+    boatFootprintHalfZ,
+  ]);
 }
 
 function cameraPosition(camera) {
