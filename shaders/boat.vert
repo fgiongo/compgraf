@@ -1,18 +1,22 @@
-precision highp float; // usa boa precisão para números reais
+precision highp float;
 
-attribute vec3 aPosition; // recebe a posição de cada vértice da esfera
-attribute vec3 aNormal; // recebe a normal de cada vértice da esfera
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+attribute vec2 aTexCoord;
 
-uniform mat4 uModelViewMatrix; // importa matriz que leva o objeto para o espaço da câmera
-uniform mat4 uProjectionMatrix; // importa matriz de projeção da câmera
-uniform mat3 uNormalMatrix; // importa matriz usada para transformar normais
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform mat3 uNormalMatrix;
 
-varying vec3 vNormalView; // envia a normal para o fragment shader
-varying vec3 vPositionView; // envia a posição para o fragment shader
+varying vec3 vNormalView;
+varying vec3 vPositionView;
+varying vec2 vTexCoord;
 
 void main() {
-  vec4 positionView = uModelViewMatrix * vec4(aPosition, 1.0); // converte a posição do vértice para o espaço da câmera
-  vNormalView = normalize(uNormalMatrix * aNormal); // converte e normaliza a normal do vértice
-  vPositionView = positionView.xyz; // guarda a posição em espaço da câmera
-  gl_Position = uProjectionMatrix * positionView; // calcula a posição final do vértice na tela
+  vec4 positionView = uModelViewMatrix * vec4(aPosition, 1.0);
+  vNormalView = normalize(uNormalMatrix * aNormal);
+  vPositionView = positionView.xyz;
+  // UV do OBJ para o fragment shader ler as texturas do modelo.
+  vTexCoord = aTexCoord;
+  gl_Position = uProjectionMatrix * positionView;
 }
