@@ -130,8 +130,7 @@ function draw() {
     ambientColor,
   };
 
-  // Desenha a água do oceano.
-  drawOcean({
+  const oceanArgs = {
     waveTime: scene.waveTime,
     waveAmplitude: scene.waveAmplitude,
     camera: scene.camera,
@@ -140,8 +139,11 @@ function draw() {
     ambientColor: scene.ambientColor,
     sky: Skybox.getSkyColors(t),
     darkness: Skybox.getDarkness(t),
-  });
+  };
 
+  // O oceano e desenhado primeiro recortando a silhueta do casco (footprint);
+  // o barco vem depois e preenche o recorte, sem a malha do mar atravessa-lo.
+  drawOcean(oceanArgs);
   drawBoat(scene);
 }
 

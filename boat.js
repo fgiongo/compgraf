@@ -6,6 +6,19 @@ let boatHullModel;
 let boatWindowModel;
 let boatHullAlbedoTexture;
 
+// Mascara de footprint: silhueta do casco vista de cima,
+// rasterizada uma vez num canvas 2D. boatFootprintHalf* guardam a meia-extensao
+// em unidades de mundo, usada para mapear XZ -> UV no shader do oceano.
+let boatFootprintMask;
+let boatFootprintHalfX = 1;
+let boatFootprintHalfZ = 1;
+const BOAT_FOOTPRINT_RES = 256;
+
+// Aperto da silhueta no casco. < 1.0 encolhe o recorte (cola mais, menos
+// fosso, porem arrisca a malha furar a borda); > 1.0 afrouxa (mais folga).
+// Este e o knob para ajustar o quanto a mascara cola no barco.
+const BOAT_FOOTPRINT_SHRINK = 0.85;
+
 const BOAT_POSITION = { x: 0, y: -9, z: 0 };
 const BOAT_ROTATION = { x: 0, y: 0, z: Math.PI };
 const BOAT_SCALE = 2;
@@ -50,6 +63,88 @@ function preloadBoat() {
 }
 
 function setupBoat() {
+  buildBoatFootprintMask();
+}
+
+// Rasteriza a silhueta do casco vista de cima (projecao no plano XZ) num canvas
+// 2D, a partir dos triangulos do modelo ja normalizado. Branco = barco. Roda
+// uma vez; a forma e estatica (o barco nao gira em torno do eixo vertical).
+function buildBoatFootprintMask() {
+  if (!boatHullModel || !boatHullModel.vertices || !boatHullModel.faces) {
+    return;
+  }
+
+  const vertices = boatHullModel.vertices;
+  const faces = boatHullModel.faces;
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const vertex of vertices) {
+    minX = Math.min(minX, vertex.x);
+    maxX = Math.max(maxX, vertex.x);
+    minZ = Math.min(minZ, vertex.z);
+    maxZ = Math.max(maxZ, vertex.z);
+  }
+
+  // Pequena folga para a silhueta nao encostar na borda da textura (o blur de
+  // feather precisa de espaco) e para cobrir a quina do casco com margem.
+  const padX = (maxX - minX) * 0.06;
+  const padZ = (maxZ - minZ) * 0.06;
+  minX -= padX;
+  maxX += padX;
+  minZ -= padZ;
+  maxZ += padZ;
+
+  const rangeX = maxX - minX;
+  const rangeZ = maxZ - minZ;
+
+  // Meia-extensao em mundo: vertices ja normalizados, falta o BOAT_SCALE.
+  // BOAT_FOOTPRINT_SHRINK aperta (<1) ou afrouxa (>1) o recorte no casco.
+  boatFootprintHalfX = (rangeX / 2) * BOAT_SCALE * BOAT_FOOTPRINT_SHRINK;
+  boatFootprintHalfZ = (rangeZ / 2) * BOAT_SCALE * BOAT_FOOTPRINT_SHRINK;
+
+  const graphics = createGraphics(BOAT_FOOTPRINT_RES, BOAT_FOOTPRINT_RES);
+  graphics.pixelDensity(1);
+  graphics.noStroke();
+  graphics.background(0);
+  graphics.fill(255);
+
+  const toU = (x) => ((x - minX) / rangeX) * BOAT_FOOTPRINT_RES;
+  const toV = (z) => ((z - minZ) / rangeZ) * BOAT_FOOTPRINT_RES;
+
+  for (const face of faces) {
+    const a = vertices[face[0]];
+    const b = vertices[face[1]];
+    const c = vertices[face[2]];
+    graphics.triangle(toU(a.x), toV(a.z), toU(b.x), toV(b.z), toU(c.x), toV(c.z));
+  }
+
+  // Borda suave para o oceano poder fazer um feather no contorno.
+  graphics.filter(BLUR, 3);
+
+  boatFootprintMask = graphics;
+}
+
+// Aplica a transformacao do barco (posicao, balanco, rotacoes e escala).
+function applyBoatBaseTransform(boatMotion) {
+  translate(boatMotion.position.x, boatMotion.position.y + BOAT_POSITION.y, boatMotion.position.z);
+  rotateZ(boatMotion.roll);
+  rotateX(boatMotion.pitch);
+  rotateX(BOAT_ROTATION.x);
+  rotateY(BOAT_ROTATION.y);
+  rotateZ(BOAT_ROTATION.z);
+  scale(BOAT_SCALE);
+  noStroke();
+}
+
+function applyBoatWindowTransform() {
+  translate(WINDOW_POSITION.x, WINDOW_POSITION.y, WINDOW_POSITION.z);
+  rotateX(WINDOW_ROTATION.x);
+  rotateY(WINDOW_ROTATION.y);
+  rotateZ(WINDOW_ROTATION.z);
+  scale(WINDOW_SCALE);
 }
 
 function drawBoat(scene) {
@@ -62,14 +157,7 @@ function drawBoat(scene) {
   const boatMotion = sampleBoatMotion(scene.waveTime, scene.waveAmplitude);
 
   push();
-  translate(boatMotion.position.x, boatMotion.position.y + BOAT_POSITION.y, boatMotion.position.z);
-  rotateZ(boatMotion.roll);
-  rotateX(boatMotion.pitch);
-  rotateX(BOAT_ROTATION.x);
-  rotateY(BOAT_ROTATION.y);
-  rotateZ(BOAT_ROTATION.z);
-  scale(BOAT_SCALE);
-  noStroke();
+  applyBoatBaseTransform(boatMotion);
 
   boatHullShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
   boatHullShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
@@ -79,11 +167,7 @@ function drawBoat(scene) {
   model(boatHullModel);
 
   push();
-  translate(WINDOW_POSITION.x, WINDOW_POSITION.y, WINDOW_POSITION.z);
-  rotateX(WINDOW_ROTATION.x);
-  rotateY(WINDOW_ROTATION.y);
-  rotateZ(WINDOW_ROTATION.z);
-  scale(WINDOW_SCALE);
+  applyBoatWindowTransform();
 
   boatWindowShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
   boatWindowShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
