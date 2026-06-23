@@ -19,10 +19,10 @@ const BOAT_FOOTPRINT_RES = 256;
 // Este e o knob para ajustar o quanto a mascara cola no barco.
 const BOAT_FOOTPRINT_SHRINK = 0.85;
 
-const BOAT_POSITION = { x: 0, y: -9, z: 0 };
+const BOAT_POSITION = { x: 0, y: -25, z: 0 };
 const BOAT_ROTATION = { x: 0, y: 0, z: Math.PI };
 const BOAT_SCALE = 2;
-const WINDOW_POSITION = { x: 0, y: 17, z: 22 };
+const WINDOW_POSITION = { x: 0, y: 15, z: 22 };
 const WINDOW_ROTATION = { x: 0, y: 0, z: 0 };
 const WINDOW_SCALE = 0.34;
 
@@ -163,6 +163,13 @@ function drawBoat(scene) {
   boatHullShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
   boatHullShader.setUniform("uLightDirectionView", lightDirectionView);
   boatHullShader.setUniform("uAlbedoTexture", boatHullAlbedoTexture);
+  // O casco recebe o mesmo céu procedural do oceano para refletir o ambiente.
+  boatHullShader.setUniform("uSkyTop", normalizedColor(scene.sky.top));
+  boatHullShader.setUniform("uSkyHorizon", normalizedColor(scene.sky.bot));
+  boatHullShader.setUniform("uDarkness", scene.darkness);
+  boatHullShader.setUniform("uWaveTime", scene.waveTime);
+  boatHullShader.setUniform("uReflectionStrength", scene.boatReflectionStrength);
+  boatHullShader.setUniform("uRayMarchSteps", scene.boatRayMarchSteps);
   shader(boatHullShader);
   model(boatHullModel);
 

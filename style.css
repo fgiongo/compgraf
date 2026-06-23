@@ -30,7 +30,8 @@ canvas {
 }
 
 .time-control,
-.amplitude-control {
+.amplitude-control,
+.reflection-control {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -44,8 +45,14 @@ canvas {
   user-select: none;
 }
 
-.amplitude-control {
+.amplitude-control,
+.reflection-control {
   font-size: 13px;
+}
+
+.amplitude-control span,
+.reflection-control span {
+  min-width: 64px;
 }
 
 .time-control button {
@@ -65,7 +72,8 @@ canvas {
 }
 
 .time-control input[type="range"],
-.amplitude-control input[type="range"] {
+.amplitude-control input[type="range"],
+.reflection-control input[type="range"] {
   width: min(46vw, 360px);
   height: 6px;
   border-radius: 999px;
@@ -85,7 +93,8 @@ canvas {
   );
 }
 
-.amplitude-control input[type="range"] {
+.amplitude-control input[type="range"],
+.reflection-control input[type="range"] {
   accent-color: #5fc9df;
 }
 
@@ -95,7 +104,8 @@ canvas {
   font-size: 13px;
 }
 
-.amplitude-control output {
+.amplitude-control output,
+.reflection-control output {
   min-width: 38px;
   text-align: right;
 }

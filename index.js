@@ -18,6 +18,8 @@ const CYCLE_SPEED = 0.00015;
 let playing = true;
 let timeEl, playBtn, clockEl;
 let waveAmplitude = 1;
+let boatReflectionStrength = 0;
+const BOAT_RAY_MARCH_STEPS_LOW = 8;
 let sceneCamera;
 
 function preload() {
@@ -47,6 +49,7 @@ function setup() {
 function setupControls() {
   setupTimeControl();
   setupAmplitudeControl();
+  setupBoatMaterialControls();
 }
 
 function setupTimeControl() {
@@ -74,6 +77,16 @@ function setupAmplitudeControl() {
   amplitudeEl.addEventListener("input", () => {
     waveAmplitude = Number(amplitudeEl.value) / 100;
     amplitudeValueEl.value = `${amplitudeEl.value}%`;
+  });
+}
+
+function setupBoatMaterialControls() {
+  const reflectionEl = document.getElementById("reflection-strength");
+  const reflectionValueEl = document.getElementById("reflection-strength-value");
+
+  reflectionEl.addEventListener("input", () => {
+    boatReflectionStrength = Number(reflectionEl.value) / 100;
+    reflectionValueEl.value = `${reflectionEl.value}%`;
   });
 }
 
@@ -120,6 +133,10 @@ function draw() {
   // Ativa a luz ambiente da cena.
   ambientLight(ambientColor[0], ambientColor[1], ambientColor[2]);
 
+  // O barco usa as mesmas cores do céu que o oceano usa para a reflexão.
+  const sky = Skybox.getSkyColors(t);
+  const darkness = Skybox.getDarkness(t);
+
   // Empacota os dados da cena que serão reutilizados por outros módulos.
   const scene = {
     waveTime: millis() / 1000,
@@ -128,6 +145,11 @@ function draw() {
     lightDirection,
     lightColor,
     ambientColor,
+    sky,
+    darkness,
+    boatReflectionStrength,
+    // O ray marching fica fixo no antigo preset "baixo"; a UI controla só a força da reflexão.
+    boatRayMarchSteps: BOAT_RAY_MARCH_STEPS_LOW,
   };
 
   const oceanArgs = {
@@ -137,8 +159,8 @@ function draw() {
     lightDirection: scene.lightDirection,
     lightColor: scene.lightColor,
     ambientColor: scene.ambientColor,
-    sky: Skybox.getSkyColors(t),
-    darkness: Skybox.getDarkness(t),
+    sky: scene.sky,
+    darkness: scene.darkness,
   };
 
   // O oceano e desenhado primeiro recortando a silhueta do casco (footprint);
