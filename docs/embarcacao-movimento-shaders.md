@@ -2,7 +2,7 @@
 
 ## 1. Objetivos
 
-Este material descreve a organizacao atual da embarcacao na cena 3D, sua movimentacao sobre o oceano e os shaders usados para renderizar casco e janelas. O foco esta restrito aos arquivos `boat.js`, `shaders/boat.vert`, `shaders/boat.frag` e `shaders/boat-window.frag`.
+Este material descreve a organizacao atual da embarcacao na cena 3D, sua movimentacao sobre o oceano e os shaders usados para renderizar casco e janelas. Tambem registra a integracao recente com o oceano para recortar a agua na regiao ocupada pelo casco. O foco principal esta nos arquivos `boat.js`, `shaders/boat.vert`, `shaders/boat.frag` e `shaders/boat-window.frag`, com uma secao especifica sobre a comunicacao com `ocean.js` e `shaders/ocean.frag`.
 
 A embarcacao nao simula dinamica naval completa. A proposta atual e acoplar visualmente o barco ao mesmo modelo de ondas usado pelo oceano, de modo que sua altura, pitch e roll acompanhem a superficie da agua em tempo real. O casco usa textura de albedo e iluminacao simples. A janela usa um material azulado, com brilho especular mais concentrado e efeito de Fresnel aproximado.
 
@@ -15,10 +15,11 @@ Ao final, deve ser possivel explicar:
 - como o vertex shader transforma posicoes, normais e coordenadas UV do OBJ;
 - como o fragment shader do casco combina albedo, luz ambiente, difusa e especular;
 - como o fragment shader da janela cria vidro estilizado com Fresnel;
+- como a silhueta do casco e enviada ao oceano para evitar agua atravessando a embarcacao;
 - onde uma etapa futura de controle dinamico de materiais por sliders deve se conectar;
 - onde uma etapa futura de ray marching ou ray tracing pode ser inserida sem quebrar a estrutura atual.
 
-> **Estado do projeto:** este documento acompanha a implementacao atual em `boat.js`, `shaders/boat.vert`, `shaders/boat.frag` e `shaders/boat-window.frag`. A modificacao dinamica dos materiais por sliders e a inclusao de ray marching/ray tracing ficam como extensoes planejadas, nao como parte ja implementada.
+> **Estado do projeto:** este documento acompanha a implementacao final atual em `boat.js`, `shaders/boat.vert`, `shaders/boat.frag` e `shaders/boat-window.frag`. O casco possui um controle visivel de `Reflexao` na interface e usa internamente um preset baixo fixo para o efeito refletivo. Ray tracing completo e reflexoes multiplas continuam como extensoes planejadas.
 
 ## Sumario
 
@@ -68,14 +69,16 @@ A separacao atual segue tres niveis:
 
 ## 3. Arquivos e responsabilidades
 
-O escopo da embarcacao esta concentrado em quatro arquivos.
+O escopo visual da embarcacao esta concentrado nos shaders e no modulo do barco. A integracao com o oceano tambem usa `ocean.js` e `shaders/ocean.frag` para recortar a agua dentro da silhueta do casco.
 
 | Arquivo | Papel atual |
 | --- | --- |
-| `boat.js` | Carrega modelos, texturas e shaders; calcula movimento; envia uniforms; desenha casco e janela. |
+| `boat.js` | Carrega modelos, texturas e shaders; calcula movimento; cria a mascara de footprint; envia uniforms; desenha casco e janela. |
 | `shaders/boat.vert` | Vertex shader comum para casco e janela. Transforma posicao e normal para espaco de visao e repassa UV. |
 | `shaders/boat.frag` | Fragment shader do casco. Usa textura de albedo, luz ambiente, difusa e especular. |
 | `shaders/boat-window.frag` | Fragment shader da janela. Usa cor-base azulada, especular concentrado e Fresnel. |
+| `ocean.js` | Envia ao shader do oceano a mascara da silhueta do casco e sua posicao atual na agua. |
+| `shaders/ocean.frag` | Descarta fragmentos da agua que caem dentro da mascara do casco. |
 
 O arquivo da janela existente usa hifen no nome: `shaders/boat-window.frag`. Se uma documentacao externa mencionar `boat_window.fra` ou `boat_window.frag`, isso deve ser tratado apenas como variacao de nome. A implementacao atual carrega `shaders/boat-window.frag`.
 
@@ -101,7 +104,7 @@ O segundo argumento `true` em `loadModel(...)` normaliza o modelo carregado pelo
 A posicao base da embarcacao e:
 
 ```javascript
-const BOAT_POSITION = { x: 0, y: -9, z: 0 };
+const BOAT_POSITION = { x: 0, y: -25, z: 0 };
 const BOAT_ROTATION = { x: 0, y: 0, z: Math.PI };
 const BOAT_SCALE = 2;
 ```
@@ -129,7 +132,7 @@ A ordem importa. Primeiro o barco e colocado na superficie da agua e inclinado p
 A janela e desenhada dentro do mesmo `push()` do casco. Portanto, herda a posicao, inclinacao, rotacao e escala da embarcacao. Em seguida recebe uma transformacao local:
 
 ```javascript
-const WINDOW_POSITION = { x: 0, y: 17, z: 22 };
+const WINDOW_POSITION = { x: 0, y: 15, z: 22 };
 const WINDOW_ROTATION = { x: 0, y: 0, z: 0 };
 const WINDOW_SCALE = 0.34;
 ```
@@ -321,7 +324,7 @@ vec3 color = ambient * 0.9 + diffuse + specular;
 gl_FragColor = vec4(color, 1.0);
 ```
 
-Esse modelo e intencionalmente simples. Ele nao possui normal map, roughness, metallic, oclusao ambiente nem conservacao rigorosa de energia. O objetivo atual e integrar o casco ao ciclo de luz da cena mantendo baixo custo e facil leitura do codigo.
+Esse modelo e intencionalmente simples. Ele nao possui normal map, roughness, metallic, oclusao ambiente nem conservacao rigorosa de energia. A implementacao atual adiciona ao casco uma camada opcional de reflexao de ambiente: o shader mistura o material base com uma aproximacao procedural do ceu e do oceano, guiada pela direcao refletida da camera. O controle visivel `Reflexao` regula a intensidade dessa mistura, enquanto o custo interno do efeito fica travado em um preset baixo. Com `Reflexao = 0%`, o visual simples original e preservado.
 
 ## 8. Shader da janela
 
@@ -392,14 +395,47 @@ As interfaces atuais sao:
 
 Como os shaders personalizados nao herdam automaticamente todos os calculos de `directionalLight()` e `ambientLight()`, `boat.js` envia a iluminacao explicitamente por uniforms. A funcao `worldDirectionToView(camera, direction)` converte a direcao de luz do mundo para o espaco da camera, garantindo que os produtos escalares do fragment shader usem vetores no mesmo espaco.
 
+Para o casco, a cena tambem envia uniforms extras usados pela reflexao de ambiente:
+
+| Uniform | Origem | Finalidade |
+| --- | --- | --- |
+| `uSkyTop` | `Skybox.getSkyColors(t).top` | Cor do ceu mais alto na reflexao. |
+| `uSkyHorizon` | `Skybox.getSkyColors(t).bot` | Cor da linha do horizonte refletida. |
+| `uDarkness` | `Skybox.getDarkness(t)` | Escurecer a agua refletida conforme o ciclo do dia. |
+| `uWaveTime` | `scene.waveTime` | Animar os detalhes de onda dentro da reflexao. |
+| `uReflectionStrength` | Slider `Reflexao` | Misturar reflexo e albedo do casco. |
+| `uRayMarchSteps` | Preset interno fixo | Controlar quantas amostras de detalhe da reflexao sao usadas. |
+
+
+### 9.1 Mascara de footprint do barco no oceano
+
+A atualizacao mais recente adicionou uma integracao inversa: alem de o barco consultar a agua, o oceano tambem recebe informacoes do barco. O objetivo e evitar que a malha da agua apareca atravessando o casco.
+
+Em `setupBoat()`, `buildBoatFootprintMask()` rasteriza a silhueta do casco vista de cima em um `createGraphics(...)`. Essa textura funciona como uma mascara: branco representa area ocupada pelo barco, preto representa area livre. A mascara e calculada uma vez a partir dos triangulos de `body_hull.obj`.
+
+Os valores `boatFootprintHalfX` e `boatFootprintHalfZ` guardam a meia-extensao da silhueta em unidades de mundo. O fator `BOAT_FOOTPRINT_SHRINK` controla o quanto o recorte fica justo no casco.
+
+Em `drawOcean(scene)`, `setBoatMaskUniforms(scene)` envia para `shaders/ocean.frag`:
+
+| Uniform | Finalidade |
+| --- | --- |
+| `uBoatFootprintEnabled` | Liga ou desliga o recorte da agua. |
+| `uBoatFootprintTex` | Textura da silhueta do casco vista de cima. |
+| `uBoatFootprintCenter` | Centro atual do barco na agua, incluindo a deriva horizontal calculada pelas ondas. |
+| `uBoatFootprintHalfExtent` | Escala usada para converter posicao XZ do mundo em UV da mascara. |
+
+No fragment shader do oceano, cada fragmento converte sua posicao `vWorldPosition.xz` para coordenadas da mascara. Se o ponto cair dentro da textura e a mascara indicar casco, o fragmento e descartado com `discard`.
+
+Essa solucao nao simula volume de agua nem colisao fisica. Ela e um recorte visual de superficie. Ainda assim, e adequada para esta etapa porque remove a interpenetracao mais visivel entre oceano e embarcacao sem mudar a malha do barco.
+
 ## 10. Extensao futura: controle dinamico de materiais
 
-Esta secao reserva o ponto de integracao para sliders de material. A implementacao atual ainda nao deve ser alterada, mas a estrutura recomendada e:
+Esta secao registra o controle de material atualmente exposto e a direcao para expansoes futuras. A implementacao atual possui apenas um slider visivel para o casco:
 
-1. Criar parametros de material em `boat.js`, mantendo valores padrao iguais ao visual atual.
-2. Atualizar esses parametros a partir de sliders da interface.
-3. Enviar os parametros para `boat.frag` e `boat-window.frag` com `setUniform(...)`.
-4. Substituir constantes fixas dos shaders por uniforms.
+1. `Reflexao`: controla quanto a reflexao de ambiente entra na cor final do casco.
+2. `boat.js` envia `uReflectionStrength` e `uRayMarchSteps` para `boat.frag`.
+3. `uRayMarchSteps` nao aparece na interface: ele fica fixo internamente em um preset baixo para manter custo previsivel em notebook.
+4. `Reflexao = 0%` mantem o material base praticamente sem o efeito refletivo adicional.
 
 Exemplos de uniforms futuros para o casco:
 
@@ -444,7 +480,7 @@ boatWindowShader.setUniform("uGlassShininess", glassShininess);
 
 ## 11. Extensao futura: ray marching ou ray tracing
 
-Esta secao fica reservada para a etapa futura de reflexos/reforco optico por ray marching ou ray tracing. Como o projeto roda em p5.js/WebGL com shaders GLSL ES 1.00, a rota mais compativel tende a ser ray marching local no fragment shader, nao ray tracing completo da cena.
+Esta secao descreve a primeira etapa implementada de reflexo no casco e o que permanece como extensao futura. Como o projeto roda em p5.js/WebGL com shaders GLSL ES 1.00, a rota escolhida foi uma reflexao de ambiente procedural no fragment shader do casco, usando um numero fixo e baixo de amostras internas. Isso nao e ray tracing completo da cena.
 
 ### 11.1 Onde a extensao entra na estrutura atual
 
@@ -454,7 +490,7 @@ Os pontos de inclusao planejados sao:
 | --- | --- |
 | `boat.js` | Enviar novos uniforms: posicao da camera, tempo, parametros de material, limites de marching e possiveis dados simplificados da cena. |
 | `shaders/boat.vert` | Repassar posicao de mundo ou posicao de visao com informacao suficiente para construir raios no fragment shader. |
-| `shaders/boat.frag` | Opcionalmente aplicar reflexos locais no casco, se o casco receber material mais polido. |
+| `shaders/boat.frag` | Aplica a primeira versao de reflexo de ambiente no casco, misturando ceu e oceano procedurais. |
 | `shaders/boat-window.frag` | Principal ponto de ray marching/ray tracing para vidro, reflexo e possivel distorcao. |
 
 Atualmente, `boat.vert` envia apenas `vPositionView`, `vNormalView` e `vTexCoord`. Para ray marching, o fragment shader precisara reconstruir um raio. Ha duas opcoes:
@@ -464,36 +500,38 @@ Atualmente, `boat.vert` envia apenas `vPositionView`, `vNormalView` e `vTexCoord
 
 Para integrar com oceano, skybox e objetos, o espaco de mundo e a opcao mais clara. A alteracao futura exigiria uniforms de matriz/modelo ou uma forma consistente de obter a posicao mundial do vertice antes da camera. Essa decisao deve ser feita junto com a arquitetura geral da cena.
 
-### 11.2 Ray marching local para a janela
+### 11.2 Reflexao de ambiente no casco
 
-Uma primeira versao viavel pode tratar a janela como uma superficie que reflete ou distorce uma aproximacao do ambiente, sem tentar intersectar todos os triangulos da cena. O fragment shader calcularia:
+A primeira versao implementada trata o casco como uma superficie que reflete uma aproximacao procedural do ambiente, sem tentar intersectar todos os triangulos reais da cena. O fragment shader usa a direcao de reflexao em espaco de visao para consultar duas fontes simplificadas:
+
+1. um gradiente de ceu baseado em `uSkyTop` e `uSkyHorizon`;
+2. uma cor de agua procedural, animada por `uWaveTime` e modulada por `uDarkness`.
+
+A forma geral do calculo e:
 
 ```glsl
-vec3 V = normalize(uCameraPosition - vPositionWorld);
-vec3 N = normalize(vNormalWorld);
-vec3 reflectedRay = reflect(-V, N);
+vec3 viewDirection = normalize(-vPositionView);
+vec3 reflectedViewRay = reflect(-viewDirection, normal);
+vec3 environmentColor = sampleEnvironmentReflection(reflectedViewRay, uRayMarchSteps);
+color = mix(color, environmentColor, uReflectionStrength * fresnel);
 ```
 
-Em seguida, poderia amostrar uma funcao procedural ou uma representacao simplificada do ambiente ao longo desse raio. Para manter custo controlado:
+Nesse arranjo, `uRayMarchSteps` nao representa bounces ou reflexoes multiplas. Ele apenas controla quantas amostras internas de detalhe de onda a funcao de reflexao usa. No estado final da interface, esse valor fica fixo em um preset baixo para manter custo baixo e comportamento previsivel.
 
-- usar numero fixo e pequeno de passos;
-- limitar distancia maxima;
-- interromper quando a distancia estimada for menor que um epsilon;
-- aplicar o resultado como contribuicao adicional ao termo especular/Fresnel;
-- manter fallback para o material atual quando o recurso estiver desligado.
-
-O fluxo conceitual seria:
+O fluxo conceitual passa a ser:
 
 ```mermaid
 flowchart LR
-    F["Fragmento da janela"]
-    R["Raio refletido ou refratado"]
-    M["Marching em campo simplificado"]
-    C["Cor aproximada do ambiente"]
-    G["Mistura com Fresnel<br/>e material atual"]
+    F["Fragmento do casco"]
+    R["Direcao refletida"]
+    E["Amostra de ceu e oceano
+procedurais"]
+    G["Mistura com Fresnel
+e material base"]
 
-    F --> R --> M --> C --> G
+    F --> R --> E --> G
 ```
+
 
 ### 11.3 Ray tracing completo da cena
 
@@ -507,7 +545,7 @@ Para seguir por esse caminho, seriam necessarios recursos adicionais:
 - multiplos passes de renderizacao ou renderizacao para textura;
 - estrategia para ordenar objetos transparentes.
 
-Por isso, a recomendacao para a proxima etapa e implementar primeiro um ray marching local e controlado, principalmente na janela, usando a estrutura de uniforms e varyings ja existente.
+Por isso, a etapa atual implementa primeiro uma reflexao de ambiente controlada no casco, usando a estrutura de uniforms e varyings ja existente. Reflexoes multiplas, interseccao com geometria real da cena e ray tracing completo continuam fora do escopo imediato.
 
 ### 11.4 Relacao com sliders de material
 
@@ -515,12 +553,11 @@ Os sliders futuros podem controlar a ativacao e a intensidade do efeito:
 
 | Controle futuro | Efeito |
 | --- | --- |
-| `Ray effect` | Liga/desliga a contribuicao de marching/tracing. |
-| `Reflection strength` | Mistura entre material atual e raio refletido. |
+| `Reflection strength` | Mistura entre material atual e ambiente refletido no casco. |
 | `Refraction strength` | Distorcao ou transmissao aproximada no vidro. |
-| `Max steps` | Custo e qualidade do marching. |
-| `Max distance` | Alcance do efeito. |
-| `Surface epsilon` | Precisao da intersecao aproximada. |
+| `Max steps` | Controle futuro caso o preset interno deixe de ser fixo. |
+| `Max distance` | Alcance de um marching futuro mais fisico. |
+| `Surface epsilon` | Precisao de uma interseccao futura baseada em SDF. |
 
 Esses controles devem ter valores padrao que mantenham o visual atual ou que ativem o efeito de forma sutil. A interface deve deixar claro quando o custo de fragment shader aumenta.
 
@@ -549,8 +586,8 @@ Esses controles devem ter valores padrao que mantenham o visual atual ou que ati
 
 - Sliders em valores padrao reproduzem o visual anterior.
 - Cada slider altera apenas o material esperado.
-- O efeito de ray marching pode ser desligado sem alterar o restante da renderizacao.
-- A quantidade de passos nao derruba a taxa de quadros em resolucao comum.
+- O efeito refletivo pode ser neutralizado com `Reflexao = 0%` sem alterar o restante da renderizacao.
+- O preset interno fixo deve manter custo estavel em resolucao comum.
 - Reflexos ou distorcoes nao aparecem quando a superficie esta de costas para a camera.
 
 ## 13. Limitacoes conhecidas
@@ -560,8 +597,9 @@ Esses controles devem ter valores padrao que mantenham o visual atual ou que ati
 - Os parametros das ondas sao duplicados em `boat.js` e precisam acompanhar o oceano.
 - O casco usa apenas textura de albedo; mapas de normal, metalicidade e rugosidade ainda nao participam do shader.
 - A transparencia da janela depende de estado de blending e ordem de desenho.
+- O recorte da agua pelo casco e uma mascara 2D vista de cima; nao e colisao fisica nem volume real.
 - O vidro nao reflete a cena real; o Fresnel atual e apenas um termo de brilho.
-- Ray marching/ray tracing ainda nao esta implementado e exigira novos dados no pipeline.
+- A reflexao atual do casco e uma aproximacao procedural de ambiente; nao ha interseccao com a geometria real do oceano ou da skybox, e ray tracing completo continua fora do escopo atual.
 
 Essas limitacoes devem ser apresentadas como escolhas de escopo. A implementacao atual prioriza coerencia visual com a agua e simplicidade de integracao.
 
@@ -576,7 +614,7 @@ Essas limitacoes devem ser apresentadas como escolhas de escopo. A implementacao
 7. Comparar o material do casco com o material da janela.
 8. Explicar o Fresnel simplificado no vidro.
 9. Mostrar onde sliders de material entrariam futuramente.
-10. Apresentar ray marching/ray tracing como extensao planejada, comecando pela janela.
+10. Apresentar a reflexao atual do casco como solucao visual leve e deixar ray tracing/ray marching mais fisico como extensao futura.
 
 ## 15. Criterio de alinhamento da implementacao
 
@@ -589,4 +627,6 @@ A documentacao e a implementacao estarao alinhadas enquanto as seguintes afirmac
 - `boat.vert` envia normal e posicao em espaco de visao para os fragment shaders.
 - `boat.frag` usa textura de albedo no casco.
 - `boat-window.frag` usa cor-base azulada, brilho especular e Fresnel.
-- Sliders de material e ray marching/ray tracing permanecem descritos como extensoes futuras, ate que sejam implementados no codigo.
+- `ocean.js` envia a mascara de footprint do casco para `shaders/ocean.frag`.
+- `shaders/ocean.frag` descarta fragmentos de agua dentro da silhueta do casco.
+- O casco possui slider visivel de `Reflexao` e usa internamente um preset baixo fixo para o efeito refletivo de ambiente; ray tracing completo e bounces permanecem futuros.
