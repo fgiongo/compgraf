@@ -6,9 +6,11 @@ uniform vec3 uLightDirectionView;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform sampler2D uAlbedoTexture;
+uniform vec3 uReflectiveBaseColor;
 uniform float uDarkness;
 uniform float uWaveTime;
 uniform float uReflectionStrength;
+uniform float uHullMaterialMode;
 uniform float uRayMarchSteps;
 
 varying vec3 vNormalView;
@@ -16,6 +18,8 @@ varying vec3 vPositionView;
 varying vec2 vTexCoord;
 
 const int MAX_ENVIRONMENT_STEPS = 32;
+const float HULL_MATERIAL_ALBEDO = 0.0;
+const float HULL_MATERIAL_REFLECTIVE = 1.0;
 
 float reflectedWaveDetail(vec3 direction, float maxSteps) {
   float total = 0.0;
@@ -70,19 +74,27 @@ void main() {
   vec3 viewDirection = normalize(-vPositionView);
   vec3 reflectedDirection = reflect(-lightDirection, normal);
   vec3 reflectedViewRay = reflect(-viewDirection, normal);
+  float reflectiveMaterial = step(0.5, uHullMaterialMode);
+
+  // O material base depende do modo selecionado na UI.
+  // No modo refletivo, o casco nasce de uma cor metalica procedural.
+  vec3 baseColor = mix(albedoSample.rgb, uReflectiveBaseColor, reflectiveMaterial);
 
   float diffuseStrength = max(dot(normal, lightDirection), 0.0);
-  float specularStrength = pow(max(dot(viewDirection, reflectedDirection), 0.0), 24.0);
+  float specularPower = mix(24.0, 52.0, reflectiveMaterial);
+  float specularStrength = pow(max(dot(viewDirection, reflectedDirection), 0.0), specularPower);
 
-  vec3 ambient = albedoSample.rgb * uAmbientColor;
-  vec3 diffuse = albedoSample.rgb * uLightColor * diffuseStrength;
-  vec3 specular = uLightColor * specularStrength * 0.16;
+  vec3 ambient = baseColor * uAmbientColor;
+  vec3 diffuse = baseColor * uLightColor * diffuseStrength;
+  vec3 specular = uLightColor * specularStrength * mix(0.16, 0.34, reflectiveMaterial);
 
   vec3 color = ambient * 0.9 + diffuse + specular;
 
   float rayEnabled = step(0.5, uRayMarchSteps) * step(0.001, uReflectionStrength);
-  float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.0);
+  float fresnel = pow(1.0 - max(dot(normal, viewDirection), 0.0), mix(2.0, 3.5, reflectiveMaterial));
   vec3 environmentColor = sampleEnvironmentReflection(reflectedViewRay, uRayMarchSteps);
+
+  // No modo albedo, a reflexao fica desligada. No modo refletivo, ela domina.
   color = mix(color, environmentColor, rayEnabled * uReflectionStrength * (0.45 + 0.55 * fresnel));
 
   gl_FragColor = vec4(color, 1.0);

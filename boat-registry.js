@@ -5,16 +5,24 @@
 const BOAT_ID_NONE = 0;
 const BOAT_ID_LOW_POLY_TUGBOAT = 1;
 
+const BOAT_MATERIAL_ALBEDO_BLUE = "albedo_blue";
+const BOAT_MATERIAL_ALBEDO_RED = "albedo_red";
+const BOAT_MATERIAL_ALBEDO_YELLOW = "albedo_yellow";
+const BOAT_MATERIAL_REFLECTIVE = "reflective";
+
 const BOAT_CATALOG = {
   [BOAT_ID_NONE]: {
     id: BOAT_ID_NONE,
     label: "Nenhum",
     enabled: false,
+    defaultMaterialId: null,
+    materials: [],
   },
   [BOAT_ID_LOW_POLY_TUGBOAT]: {
     id: BOAT_ID_LOW_POLY_TUGBOAT,
     label: "Low Poly Tugboat",
     enabled: true,
+    defaultMaterialId: BOAT_MATERIAL_ALBEDO_BLUE,
     rootTransform: {
       position: { x: 0, y: -10, z: 0 },
       rotation: { x: 0, y: 0, z: Math.PI },
@@ -26,7 +34,6 @@ const BOAT_CATALOG = {
       hull: {
         modelPath: "assets/models/low_poly_tugboat/hull.obj",
         modelNormalize: false,
-        albedoPath: "assets/models/low_poly_tugboat/hull_albedo.png",
       },
       window: {
         modelPath: "assets/models/low_poly_tugboat/window.obj",
@@ -44,14 +51,38 @@ const BOAT_CATALOG = {
       halfWidth: 16,
     },
     // O footprint controla apenas o recorte do oceano sob o casco.
+    // O blur menor preserva mais o formato real da malha vista de cima.
     footprint: {
-      shrink: 0.85,
+      shrink: 0.98,
+      blurRadius: 1,
     },
-    // Este bloco deixa preparado onde cada embarcacao pode declarar
-    // informacoes de material quando houver alternancia albedo/metal futuramente.
-    material: {
-      hullShadingMode: "albedo",
-    },
+    // Cada material do casco decide se usa textura de albedo ou se sera
+    // construido diretamente no fragment shader como material refletivo.
+    materials: [
+      {
+        id: BOAT_MATERIAL_ALBEDO_BLUE,
+        label: "Blue",
+        shadingModel: "albedo",
+        albedoPath: "assets/models/low_poly_tugboat/hull_albedo_blue.png",
+      },
+      {
+        id: BOAT_MATERIAL_ALBEDO_RED,
+        label: "Red",
+        shadingModel: "albedo",
+        albedoPath: "assets/models/low_poly_tugboat/hull_albedo_red.png",
+      },
+      {
+        id: BOAT_MATERIAL_ALBEDO_YELLOW,
+        label: "Yellow",
+        shadingModel: "albedo",
+        albedoPath: "assets/models/low_poly_tugboat/hull_albedo_yellow.png",
+      },
+      {
+        id: BOAT_MATERIAL_REFLECTIVE,
+        label: "Reflective",
+        shadingModel: "reflective",
+      },
+    ],
   },
 };
 

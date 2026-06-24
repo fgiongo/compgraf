@@ -18,7 +18,6 @@ const CYCLE_SPEED = 0.00015;
 let playing = true;
 let timeEl, playBtn, clockEl;
 let waveAmplitude = 1;
-let boatReflectionStrength = 0;
 const BOAT_RAY_MARCH_STEPS_LOW = 8;
 let sceneCamera;
 let selectedBoatId = BOAT_ID_LOW_POLY_TUGBOAT;
@@ -51,8 +50,8 @@ function setup() {
 function setupControls() {
   setupTimeControl();
   setupAmplitudeControl();
-  setupBoatMaterialControls();
   setupBoatSelectControl();
+  setupBoatMaterialSelectControl();
 }
 
 function setupTimeControl() {
@@ -83,16 +82,6 @@ function setupAmplitudeControl() {
   });
 }
 
-function setupBoatMaterialControls() {
-  const reflectionEl = document.getElementById("reflection-strength");
-  const reflectionValueEl = document.getElementById("reflection-strength-value");
-
-  reflectionEl.addEventListener("input", () => {
-    boatReflectionStrength = Number(reflectionEl.value) / 100;
-    reflectionValueEl.value = `${reflectionEl.value}%`;
-  });
-}
-
 function setupBoatSelectControl() {
   const boatSelectEl = document.getElementById("boat-select");
 
@@ -108,7 +97,46 @@ function setupBoatSelectControl() {
   boatSelectEl.addEventListener("change", () => {
     selectedBoatId = Number(boatSelectEl.value);
     setActiveBoat(selectedBoatId);
+    refreshBoatMaterialSelect();
   });
+}
+
+function setupBoatMaterialSelectControl() {
+  const materialSelectEl = document.getElementById("boat-material-select");
+
+  materialSelectEl.addEventListener("change", () => {
+    setActiveBoatMaterial(materialSelectEl.value);
+  });
+
+  refreshBoatMaterialSelect();
+}
+
+function refreshBoatMaterialSelect() {
+  const materialSelectEl = document.getElementById("boat-material-select");
+  const materialOptions = getActiveBoatMaterialOptions();
+
+  materialSelectEl.innerHTML = "";
+
+  if (materialOptions.length === 0) {
+    const optionEl = document.createElement("option");
+    optionEl.value = "";
+    optionEl.textContent = "Sem material";
+    materialSelectEl.appendChild(optionEl);
+    materialSelectEl.disabled = true;
+    materialSelectEl.value = "";
+    return;
+  }
+
+  materialSelectEl.disabled = false;
+
+  for (const option of materialOptions) {
+    const optionEl = document.createElement("option");
+    optionEl.value = option.id;
+    optionEl.textContent = option.label;
+    materialSelectEl.appendChild(optionEl);
+  }
+
+  materialSelectEl.value = getActiveBoatMaterialId() ?? materialOptions[0].id;
 }
 
 function setPlaying(on) {
@@ -168,8 +196,7 @@ function draw() {
     ambientColor,
     sky,
     darkness,
-    boatReflectionStrength,
-    // O ray marching fica fixo no antigo preset "baixo"; a UI controla só a força da reflexão.
+    // O ray marching continua no preset baixo para notebook.
     boatRayMarchSteps: BOAT_RAY_MARCH_STEPS_LOW,
   };
 

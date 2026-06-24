@@ -4,6 +4,7 @@ let boatHullShader;
 let boatWindowShader;
 let activeBoatId = BOAT_ID_NONE;
 let activeBoatConfig = getBoatConfig(BOAT_ID_NONE);
+let activeBoatMaterialId = null;
 const boatAssetsById = {};
 
 // Mascara de footprint: silhueta do casco vista de cima,
@@ -13,6 +14,11 @@ let boatFootprintMask;
 let boatFootprintHalfX = 1;
 let boatFootprintHalfZ = 1;
 const BOAT_FOOTPRINT_RES = 256;
+
+const BOAT_HULL_SHADING_ALBEDO = 0;
+const BOAT_HULL_SHADING_REFLECTIVE = 1;
+const BOAT_REFLECTIVE_STRENGTH = 0.82;
+const BOAT_REFLECTIVE_BASE_COLOR = [0.72, 0.76, 0.80];
 
 const BOAT_WAVES = [
   { direction: { x: 0.9781, z: 0.2079 }, wavelength: 420.0, amplitude: 8.0, steepness: 0.38, phase: 0.0 },
@@ -44,6 +50,13 @@ function preloadBoat() {
 
     const hullPart = boat.parts?.hull;
     const windowPart = boat.parts?.window;
+    const materialTextures = {};
+
+    for (const material of boat.materials ?? []) {
+      if (material.albedoPath) {
+        materialTextures[material.id] = loadImage(material.albedoPath);
+      }
+    }
 
     boatAssetsById[boat.id] = {
       // Cada parte pode decidir se quer a normalizacao do p5.
@@ -55,7 +68,7 @@ function preloadBoat() {
       windowModel: windowPart?.modelPath
         ? loadModel(windowPart.modelPath, windowPart.modelNormalize ?? false)
         : null,
-      hullAlbedoTexture: hullPart?.albedoPath ? loadImage(hullPart.albedoPath) : null,
+      hullMaterialTextures: materialTextures,
     };
   }
 }
@@ -67,7 +80,44 @@ function setupBoat() {
 function setActiveBoat(boatId) {
   activeBoatId = boatId;
   activeBoatConfig = getBoatConfig(boatId);
+  setActiveBoatMaterial(activeBoatConfig.defaultMaterialId ?? null);
   buildBoatFootprintMask();
+}
+
+function setActiveBoatMaterial(materialId) {
+  const materials = activeBoatConfig.materials ?? [];
+  const hasMaterial = materials.some((material) => material.id === materialId);
+  activeBoatMaterialId = hasMaterial ? materialId : (activeBoatConfig.defaultMaterialId ?? null);
+}
+
+function getActiveBoatMaterialOptions() {
+  return (activeBoatConfig.materials ?? []).map((material) => ({
+    id: material.id,
+    label: material.label,
+  }));
+}
+
+function getActiveBoatMaterialId() {
+  return activeBoatMaterialId;
+}
+
+function getActiveBoatMaterialConfig() {
+  const materials = activeBoatConfig.materials ?? [];
+  return materials.find((material) => material.id === activeBoatMaterialId) ?? null;
+}
+
+function getFallbackHullTexture() {
+  const boatAssets = getActiveBoatAssets();
+  const materials = activeBoatConfig.materials ?? [];
+
+  for (const material of materials) {
+    const texture = boatAssets?.hullMaterialTextures?.[material.id];
+    if (texture) {
+      return texture;
+    }
+  }
+
+  return null;
 }
 
 function getActiveBoatAssets() {
@@ -138,8 +188,8 @@ function buildBoatFootprintMask() {
     graphics.triangle(toU(a.x), toV(a.z), toU(b.x), toV(b.z), toU(c.x), toV(c.z));
   }
 
-  // Borda suave para o oceano poder fazer um feather no contorno.
-  graphics.filter(BLUR, 3);
+  // Borda suave para o oceano poder fazer um feather no contorno sem virar oval.
+  graphics.filter(BLUR, footprint.blurRadius ?? 1);
 
   boatFootprintMask = graphics;
 }
@@ -179,13 +229,15 @@ function drawBoat(scene) {
   const boatAssets = getActiveBoatAssets();
   const boatHullModel = boatAssets?.hullModel;
   const boatWindowModel = boatAssets?.windowModel;
-  const boatHullAlbedoTexture = boatAssets?.hullAlbedoTexture;
+  const activeMaterial = getActiveBoatMaterialConfig();
 
-  if (!boatHullModel || !boatWindowModel) {
+  if (!boatHullModel || !boatWindowModel || !activeMaterial) {
     return;
   }
 
   const lightDirectionView = worldDirectionToView(scene.camera, scene.lightDirection);
+  const hullTexture = boatAssets?.hullMaterialTextures?.[activeMaterial.id] ?? getFallbackHullTexture();
+  const isReflective = activeMaterial.shadingModel === "reflective";
   // O barco agora le a mesma agua do oceano para ganhar altura e inclinacao coerentes.
   const boatMotion = sampleBoatMotion(scene.waveTime, scene.waveAmplitude);
 
@@ -195,13 +247,21 @@ function drawBoat(scene) {
   boatHullShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
   boatHullShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
   boatHullShader.setUniform("uLightDirectionView", lightDirectionView);
-  boatHullShader.setUniform("uAlbedoTexture", boatHullAlbedoTexture);
+  boatHullShader.setUniform("uAlbedoTexture", hullTexture);
   // O casco recebe o mesmo ceu procedural do oceano para refletir o ambiente.
   boatHullShader.setUniform("uSkyTop", normalizedColor(scene.sky.top));
   boatHullShader.setUniform("uSkyHorizon", normalizedColor(scene.sky.bot));
   boatHullShader.setUniform("uDarkness", scene.darkness);
   boatHullShader.setUniform("uWaveTime", scene.waveTime);
-  boatHullShader.setUniform("uReflectionStrength", scene.boatReflectionStrength);
+  boatHullShader.setUniform(
+    "uHullMaterialMode",
+    isReflective ? BOAT_HULL_SHADING_REFLECTIVE : BOAT_HULL_SHADING_ALBEDO
+  );
+  boatHullShader.setUniform(
+    "uReflectionStrength",
+    isReflective ? BOAT_REFLECTIVE_STRENGTH : 0
+  );
+  boatHullShader.setUniform("uReflectiveBaseColor", BOAT_REFLECTIVE_BASE_COLOR);
   boatHullShader.setUniform("uRayMarchSteps", scene.boatRayMarchSteps);
   shader(boatHullShader);
   model(boatHullModel);
