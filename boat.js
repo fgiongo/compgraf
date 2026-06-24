@@ -18,7 +18,7 @@ const BOAT_FOOTPRINT_RES = 256;
 const BOAT_HULL_SHADING_ALBEDO = 0;
 const BOAT_HULL_SHADING_REFLECTIVE = 1;
 const BOAT_REFLECTIVE_STRENGTH = 0.82;
-const BOAT_REFLECTIVE_BASE_COLOR = [0.72, 0.76, 0.80];
+const BOAT_REFLECTIVE_BASE_COLOR = [0.18, 0.20, 0.22];
 
 const BOAT_WAVES = [
   { direction: { x: 0.9781, z: 0.2079 }, wavelength: 420.0, amplitude: 8.0, steepness: 0.38, phase: 0.0 },
