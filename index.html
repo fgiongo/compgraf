@@ -29,11 +29,17 @@
         <input type="range" id="reflection-strength" min="0" max="100" value="0" />
         <output id="reflection-strength-value" for="reflection-strength">0%</output>
       </label>
+
+      <label class="select-control" for="boat-select">
+        <span>Barco</span>
+        <select id="boat-select" aria-label="Selecionar embarcação"></select>
+      </label>
     </div>
 
     <script src="vendor/p5/p5.min.js"></script>
     <script src="skybox.js"></script>
     <script src="ocean.js"></script>
+    <script src="boat-registry.js"></script>
     <script src="boat.js"></script>
     <script src="index.js"></script>
   </body>

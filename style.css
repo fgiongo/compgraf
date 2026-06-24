@@ -31,7 +31,8 @@ canvas {
 
 .time-control,
 .amplitude-control,
-.reflection-control {
+.reflection-control,
+.select-control {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -46,12 +47,14 @@ canvas {
 }
 
 .amplitude-control,
-.reflection-control {
+.reflection-control,
+.select-control {
   font-size: 13px;
 }
 
 .amplitude-control span,
-.reflection-control span {
+.reflection-control span,
+.select-control span {
   min-width: 64px;
 }
 
@@ -108,6 +111,16 @@ canvas {
 .reflection-control output {
   min-width: 38px;
   text-align: right;
+}
+
+.select-control select {
+  min-width: 180px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / 15%);
+  background: rgb(255 255 255 / 8%);
+  color: inherit;
+  font: inherit;
 }
 
 .spinner {

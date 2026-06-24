@@ -2,9 +2,9 @@
 
 let boatHullShader;
 let boatWindowShader;
-let boatHullModel;
-let boatWindowModel;
-let boatHullAlbedoTexture;
+let activeBoatId = BOAT_ID_NONE;
+let activeBoatConfig = getBoatConfig(BOAT_ID_NONE);
+const boatAssetsById = {};
 
 // Mascara de footprint: silhueta do casco vista de cima,
 // rasterizada uma vez num canvas 2D. boatFootprintHalf* guardam a meia-extensao
@@ -13,25 +13,6 @@ let boatFootprintMask;
 let boatFootprintHalfX = 1;
 let boatFootprintHalfZ = 1;
 const BOAT_FOOTPRINT_RES = 256;
-
-// Aperto da silhueta no casco. < 1.0 encolhe o recorte (cola mais, menos
-// fosso, porem arrisca a malha furar a borda); > 1.0 afrouxa (mais folga).
-// Este e o knob para ajustar o quanto a mascara cola no barco.
-const BOAT_FOOTPRINT_SHRINK = 0.85;
-
-const BOAT_POSITION = { x: 0, y: -25, z: 0 };
-const BOAT_ROTATION = { x: 0, y: 0, z: Math.PI };
-const BOAT_SCALE = 2;
-const WINDOW_POSITION = { x: 0, y: 15, z: 22 };
-const WINDOW_ROTATION = { x: 0, y: 0, z: 0 };
-const WINDOW_SCALE = 0.34;
-
-// Estes comprimentos definem o "tamanho virtual" usado para ler a agua.
-// Eles nao mudam a malha do barco; so controlam o quanto pitch e roll reagem.
-const BOAT_WAVE_SAMPLE = {
-  halfLength: 34,
-  halfWidth: 16,
-};
 
 const BOAT_WAVES = [
   { direction: { x: 0.9781, z: 0.2079 }, wavelength: 420.0, amplitude: 8.0, steepness: 0.38, phase: 0.0 },
@@ -56,26 +37,62 @@ function preloadBoat() {
     "shaders/boat-window.frag"
   );
 
-  boatHullModel = loadModel("assets/models/mod_boat/body_hull.obj", true);
-  boatWindowModel = loadModel("assets/models/mod_boat/body_window.obj", true);
+  for (const boat of Object.values(BOAT_CATALOG)) {
+    if (!boat.enabled) {
+      continue;
+    }
 
-  boatHullAlbedoTexture = loadImage("assets/models/mod_boat/body_hull_albedo.png");
+    const hullPart = boat.parts?.hull;
+    const windowPart = boat.parts?.window;
+
+    boatAssetsById[boat.id] = {
+      // Cada parte pode decidir se quer a normalizacao do p5.
+      // Para casco + janela exportados juntos do Blender, manter `false`
+      // preserva a escala relativa entre as pecas.
+      hullModel: hullPart?.modelPath
+        ? loadModel(hullPart.modelPath, hullPart.modelNormalize ?? false)
+        : null,
+      windowModel: windowPart?.modelPath
+        ? loadModel(windowPart.modelPath, windowPart.modelNormalize ?? false)
+        : null,
+      hullAlbedoTexture: hullPart?.albedoPath ? loadImage(hullPart.albedoPath) : null,
+    };
+  }
 }
 
 function setupBoat() {
   buildBoatFootprintMask();
 }
 
+function setActiveBoat(boatId) {
+  activeBoatId = boatId;
+  activeBoatConfig = getBoatConfig(boatId);
+  buildBoatFootprintMask();
+}
+
+function getActiveBoatAssets() {
+  return boatAssetsById[activeBoatId] ?? null;
+}
+
 // Rasteriza a silhueta do casco vista de cima (projecao no plano XZ) num canvas
-// 2D, a partir dos triangulos do modelo ja normalizado. Branco = barco. Roda
+// 2D, a partir dos triangulos do modelo carregado. Branco = barco. Roda
 // uma vez; a forma e estatica (o barco nao gira em torno do eixo vertical).
 function buildBoatFootprintMask() {
-  if (!boatHullModel || !boatHullModel.vertices || !boatHullModel.faces) {
+  boatFootprintMask = null;
+  boatFootprintHalfX = 1;
+  boatFootprintHalfZ = 1;
+
+  const boatAssets = getActiveBoatAssets();
+  const hullModel = boatAssets?.hullModel;
+  const rootTransform = activeBoatConfig.rootTransform;
+  const footprint = activeBoatConfig.footprint;
+
+  if (!activeBoatConfig.enabled || !hullModel || !hullModel.vertices || !hullModel.faces) {
     return;
   }
 
-  const vertices = boatHullModel.vertices;
-  const faces = boatHullModel.faces;
+  const vertices = hullModel.vertices;
+  const faces = hullModel.faces;
 
   let minX = Infinity;
   let maxX = -Infinity;
@@ -100,10 +117,10 @@ function buildBoatFootprintMask() {
   const rangeX = maxX - minX;
   const rangeZ = maxZ - minZ;
 
-  // Meia-extensao em mundo: vertices ja normalizados, falta o BOAT_SCALE.
-  // BOAT_FOOTPRINT_SHRINK aperta (<1) ou afrouxa (>1) o recorte no casco.
-  boatFootprintHalfX = (rangeX / 2) * BOAT_SCALE * BOAT_FOOTPRINT_SHRINK;
-  boatFootprintHalfZ = (rangeZ / 2) * BOAT_SCALE * BOAT_FOOTPRINT_SHRINK;
+  // Meia-extensao em mundo: vertices do asset, vezes a escala raiz.
+  // footprint.shrink aperta (<1) ou afrouxa (>1) o recorte no casco.
+  boatFootprintHalfX = (rangeX / 2) * rootTransform.scale * footprint.shrink;
+  boatFootprintHalfZ = (rangeZ / 2) * rootTransform.scale * footprint.shrink;
 
   const graphics = createGraphics(BOAT_FOOTPRINT_RES, BOAT_FOOTPRINT_RES);
   graphics.pixelDensity(1);
@@ -129,25 +146,41 @@ function buildBoatFootprintMask() {
 
 // Aplica a transformacao do barco (posicao, balanco, rotacoes e escala).
 function applyBoatBaseTransform(boatMotion) {
-  translate(boatMotion.position.x, boatMotion.position.y + BOAT_POSITION.y, boatMotion.position.z);
+  const rootTransform = activeBoatConfig.rootTransform;
+
+  translate(
+    boatMotion.position.x,
+    boatMotion.position.y + rootTransform.position.y,
+    boatMotion.position.z
+  );
   rotateZ(boatMotion.roll);
   rotateX(boatMotion.pitch);
-  rotateX(BOAT_ROTATION.x);
-  rotateY(BOAT_ROTATION.y);
-  rotateZ(BOAT_ROTATION.z);
-  scale(BOAT_SCALE);
+  rotateX(rootTransform.rotation.x);
+  rotateY(rootTransform.rotation.y);
+  rotateZ(rootTransform.rotation.z);
+  scale(rootTransform.scale);
   noStroke();
 }
 
 function applyBoatWindowTransform() {
-  translate(WINDOW_POSITION.x, WINDOW_POSITION.y, WINDOW_POSITION.z);
-  rotateX(WINDOW_ROTATION.x);
-  rotateY(WINDOW_ROTATION.y);
-  rotateZ(WINDOW_ROTATION.z);
-  scale(WINDOW_SCALE);
+  const windowTransform = activeBoatConfig.parts.window.transform;
+  translate(windowTransform.position.x, windowTransform.position.y, windowTransform.position.z);
+  rotateX(windowTransform.rotation.x);
+  rotateY(windowTransform.rotation.y);
+  rotateZ(windowTransform.rotation.z);
+  scale(windowTransform.scale);
 }
 
 function drawBoat(scene) {
+  if (!activeBoatConfig.enabled) {
+    return;
+  }
+
+  const boatAssets = getActiveBoatAssets();
+  const boatHullModel = boatAssets?.hullModel;
+  const boatWindowModel = boatAssets?.windowModel;
+  const boatHullAlbedoTexture = boatAssets?.hullAlbedoTexture;
+
   if (!boatHullModel || !boatWindowModel) {
     return;
   }
@@ -163,7 +196,7 @@ function drawBoat(scene) {
   boatHullShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
   boatHullShader.setUniform("uLightDirectionView", lightDirectionView);
   boatHullShader.setUniform("uAlbedoTexture", boatHullAlbedoTexture);
-  // O casco recebe o mesmo céu procedural do oceano para refletir o ambiente.
+  // O casco recebe o mesmo ceu procedural do oceano para refletir o ambiente.
   boatHullShader.setUniform("uSkyTop", normalizedColor(scene.sky.top));
   boatHullShader.setUniform("uSkyHorizon", normalizedColor(scene.sky.bot));
   boatHullShader.setUniform("uDarkness", scene.darkness);
@@ -188,17 +221,18 @@ function drawBoat(scene) {
 }
 
 function sampleBoatMotion(waveTime, waveAmplitude) {
-  const centerBase = { x: BOAT_POSITION.x, z: BOAT_POSITION.z };
+  const centerBase = activeBoatConfig.rootTransform.position;
+  const waveSample = activeBoatConfig.waveSample;
   const center = sampleOceanSurface(centerBase.x, centerBase.z, waveTime, waveAmplitude);
 
   // Amostramos frente/tras e esquerda/direita para aproximar a inclinacao local da agua.
-  const bow = sampleOceanSurface(centerBase.x, centerBase.z + BOAT_WAVE_SAMPLE.halfLength, waveTime, waveAmplitude);
-  const stern = sampleOceanSurface(centerBase.x, centerBase.z - BOAT_WAVE_SAMPLE.halfLength, waveTime, waveAmplitude);
-  const port = sampleOceanSurface(centerBase.x - BOAT_WAVE_SAMPLE.halfWidth, centerBase.z, waveTime, waveAmplitude);
-  const starboard = sampleOceanSurface(centerBase.x + BOAT_WAVE_SAMPLE.halfWidth, centerBase.z, waveTime, waveAmplitude);
+  const bow = sampleOceanSurface(centerBase.x, centerBase.z + waveSample.halfLength, waveTime, waveAmplitude);
+  const stern = sampleOceanSurface(centerBase.x, centerBase.z - waveSample.halfLength, waveTime, waveAmplitude);
+  const port = sampleOceanSurface(centerBase.x - waveSample.halfWidth, centerBase.z, waveTime, waveAmplitude);
+  const starboard = sampleOceanSurface(centerBase.x + waveSample.halfWidth, centerBase.z, waveTime, waveAmplitude);
 
-  const pitch = atan2(stern.y - bow.y, BOAT_WAVE_SAMPLE.halfLength * 2.0);
-  const roll = atan2(starboard.y - port.y, BOAT_WAVE_SAMPLE.halfWidth * 2.0);
+  const pitch = atan2(stern.y - bow.y, waveSample.halfLength * 2.0);
+  const roll = atan2(starboard.y - port.y, waveSample.halfWidth * 2.0);
 
   return {
     position: center,
@@ -247,4 +281,22 @@ function worldDirectionToView(camera, direction) {
     p5.Vector.dot(light, cameraUp),
     -p5.Vector.dot(light, forward),
   ];
+}
+
+function getActiveBoatFootprint(waveTime, waveAmplitude) {
+  if (!activeBoatConfig.enabled || !boatFootprintMask) {
+    return null;
+  }
+
+  const rootPosition = activeBoatConfig.rootTransform.position;
+  const center = sampleOceanSurface(rootPosition.x, rootPosition.z, waveTime, waveAmplitude);
+
+  return {
+    mask: boatFootprintMask,
+    center,
+    halfExtent: {
+      x: boatFootprintHalfX,
+      z: boatFootprintHalfZ,
+    },
+  };
 }

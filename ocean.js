@@ -67,26 +67,19 @@ function drawOcean(scene) {
 }
 
 function setBoatMaskUniforms(scene) {
-  // sampleOceanSurface, BOAT_POSITION e a mascara de footprint vivem em boat.js
-  // (mesmo escopo global). center segue a deriva horizontal do barco na agua.
-  const footprintEnabled = Boolean(boatFootprintMask);
+  // O recorte do oceano depende da embarcacao ativa.
+  const footprint = getActiveBoatFootprint(scene.waveTime, scene.waveAmplitude);
+  const footprintEnabled = Boolean(footprint);
   oceanShader.setUniform("uBoatFootprintEnabled", footprintEnabled ? 1 : 0);
   if (!footprintEnabled) {
     return;
   }
 
-  const center = sampleOceanSurface(
-    BOAT_POSITION.x,
-    BOAT_POSITION.z,
-    scene.waveTime,
-    scene.waveAmplitude
-  );
-
-  oceanShader.setUniform("uBoatFootprintTex", boatFootprintMask);
-  oceanShader.setUniform("uBoatFootprintCenter", [center.x, center.z]);
+  oceanShader.setUniform("uBoatFootprintTex", footprint.mask);
+  oceanShader.setUniform("uBoatFootprintCenter", [footprint.center.x, footprint.center.z]);
   oceanShader.setUniform("uBoatFootprintHalfExtent", [
-    boatFootprintHalfX,
-    boatFootprintHalfZ,
+    footprint.halfExtent.x,
+    footprint.halfExtent.z,
   ]);
 }
 

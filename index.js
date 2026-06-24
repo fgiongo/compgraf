@@ -21,6 +21,7 @@ let waveAmplitude = 1;
 let boatReflectionStrength = 0;
 const BOAT_RAY_MARCH_STEPS_LOW = 8;
 let sceneCamera;
+let selectedBoatId = BOAT_ID_LOW_POLY_TUGBOAT;
 
 function preload() {
   preloadOcean();
@@ -39,6 +40,7 @@ function setup() {
 
   Skybox.init(); // gera as estrelas (uma vez)
   setupOcean();
+  setActiveBoat(selectedBoatId);
   setupBoat();
 
   setupControls();
@@ -50,6 +52,7 @@ function setupControls() {
   setupTimeControl();
   setupAmplitudeControl();
   setupBoatMaterialControls();
+  setupBoatSelectControl();
 }
 
 function setupTimeControl() {
@@ -87,6 +90,24 @@ function setupBoatMaterialControls() {
   reflectionEl.addEventListener("input", () => {
     boatReflectionStrength = Number(reflectionEl.value) / 100;
     reflectionValueEl.value = `${reflectionEl.value}%`;
+  });
+}
+
+function setupBoatSelectControl() {
+  const boatSelectEl = document.getElementById("boat-select");
+
+  for (const option of getBoatOptions()) {
+    const optionEl = document.createElement("option");
+    optionEl.value = String(option.id);
+    optionEl.textContent = option.label;
+    boatSelectEl.appendChild(optionEl);
+  }
+
+  boatSelectEl.value = String(selectedBoatId);
+
+  boatSelectEl.addEventListener("change", () => {
+    selectedBoatId = Number(boatSelectEl.value);
+    setActiveBoat(selectedBoatId);
   });
 }
 
