@@ -1,7 +1,9 @@
 "use strict";
 
-const OCEAN_SIZE = 2400;
-const OCEAN_DETAIL = 160;
+// Malha grande o bastante para alcancar o horizonte (alem do raio do domo do
+// ceu). Como ela se re-centra no barco, so precisa cobrir o disco visivel.
+const OCEAN_SIZE = 5600;
+const OCEAN_DETAIL = 200;
 
 let oceanShader;
 let oceanGeometry;

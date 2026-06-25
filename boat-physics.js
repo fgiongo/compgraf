@@ -14,8 +14,7 @@ const DEFAULT_BOAT_PARAMS = {
   buoyancyStiffness: 9,
   verticalDamping: 3.2,
   angularDamping: 4.0,
-  pitchResponse: 0.9,
-  rollResponse: 1.1,
+  angularInertia: 4000,  // inercia rotacional (pitch/roll); maior = mais lento/estavel
   // Pontos de prova no espaco local do casco (proa, popa, bombordo, estibordo, centro).
   probes: [
     { x: 0, z: 34 },   // proa
@@ -35,6 +34,8 @@ function createBoatBody(initial) {
     yawRate: 0,
     pitch: 0,
     roll: 0,
+    pitchRate: 0,
+    rollRate: 0,
   };
 }
 
@@ -42,31 +43,42 @@ function forwardVector(yaw) {
   return { x: Math.sin(yaw), z: Math.cos(yaw) };
 }
 
-// Empuxo por pontos de prova. Cada ponto submerso empurra o barco para a
-// superficie; a assimetria entre proa/popa e bombordo/estibordo gera pitch/roll.
+// Empuxo por pontos de prova (aproximacao de Arquimedes). Cada sonda mede sua
+// propria profundidade submersa -- ja considerando a inclinacao atual do casco
+// -- e gera uma forca para cima proporcional. A assimetria entre as sondas
+// produz torques que NIVELAM o barco com a agua (auto-nivelamento real), em vez
+// de simplesmente decair pitch/roll a zero como antes.
 function applyBuoyancy(body, dt, sampleWaterHeight, params) {
   const cosY = Math.cos(body.yaw);
   const sinY = Math.sin(body.yaw);
+  const sinPitch = Math.sin(body.pitch);
+  const sinRoll = Math.sin(body.roll);
 
-  let verticalForce = params.gravity; // gravidade puxa para baixo (y+ e para baixo)
-  let pitchTorque = 0;
-  let rollTorque = 0;
+  let verticalForce = params.gravity * params.mass; // peso, para baixo (y+)
+  let pitchTorque = 0; // proa/popa
+  let rollTorque = 0;  // bombordo/estibordo
 
   for (const probe of params.probes) {
-    // Offset local -> mundo (rotaciona pelo yaw no plano XZ).
+    // Posicao de mundo da sonda no plano XZ (offset local girado pelo yaw).
     const worldX = body.pos.x + probe.x * cosY + probe.z * sinY;
     const worldZ = body.pos.z - probe.x * sinY + probe.z * cosY;
     const waterY = sampleWaterHeight(worldX, worldZ);
 
-    // Submerso quando o ponto esta abaixo da agua: em p5, "abaixo" = y maior
-    // que waterY (y+ para baixo). submersion > 0 gera empuxo para cima (y-).
-    const submersion = body.pos.y - waterY;
+    // Altura de mundo da sonda, incluindo a inclinacao do casco. Em p5 (y+ para
+    // baixo) e na ordem rotateZ(roll)*rotateX(pitch): a proa (+z) sobe com pitch
+    // (y diminui) e o estibordo (+x) afunda com roll (y aumenta).
+    const probeY = body.pos.y - probe.z * sinPitch + probe.x * sinRoll;
+
+    // Submerso quando a sonda esta abaixo da agua (probeY > waterY).
+    const submersion = probeY - waterY;
     if (submersion > 0) {
       const lift = submersion * params.buoyancyStiffness;
-      verticalForce -= lift; // empurra para cima (diminui y)
-      // Torques: proa/popa (z) -> pitch; bombordo/estibordo (x) -> roll.
-      pitchTorque += -lift * probe.z * params.pitchResponse * 0.001;
-      rollTorque += lift * probe.x * params.rollResponse * 0.001;
+      verticalForce -= lift; // empuxo para cima (diminui y)
+      // Torques restauradores: a sonda mais submersa e empurrada para cima.
+      // Sinais opostos entre pitch (eixo X) e roll (eixo Z) por causa da
+      // ordem das rotacoes do casco.
+      pitchTorque += lift * probe.z;
+      rollTorque -= lift * probe.x;
     }
   }
 
@@ -75,11 +87,13 @@ function applyBuoyancy(body, dt, sampleWaterHeight, params) {
   body.vel.y -= body.vel.y * Math.min(params.verticalDamping * dt, 1);
   body.pos.y += body.vel.y * dt;
 
-  // Pitch/roll: relaxam para o alvo dado pelos torques, com amortecimento.
-  body.pitch += pitchTorque * dt;
-  body.roll += rollTorque * dt;
-  body.pitch -= body.pitch * Math.min(params.angularDamping * dt, 1);
-  body.roll -= body.roll * Math.min(params.angularDamping * dt, 1);
+  // Angular: integra velocidade angular a partir dos torques, com amortecimento.
+  body.pitchRate += (pitchTorque / params.angularInertia) * dt;
+  body.rollRate += (rollTorque / params.angularInertia) * dt;
+  body.pitchRate -= body.pitchRate * Math.min(params.angularDamping * dt, 1);
+  body.rollRate -= body.rollRate * Math.min(params.angularDamping * dt, 1);
+  body.pitch += body.pitchRate * dt;
+  body.roll += body.rollRate * dt;
 }
 
 function stepBoat(body, controls, dt, sampleWaterHeight, params) {

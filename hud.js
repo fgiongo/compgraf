@@ -24,7 +24,7 @@ const Hud = {
           <span class="hud-pill" id="hud-best">Best --:--.--</span>
           <span class="hud-pill" id="hud-speed">0 kn</span>
         </div>
-        <div class="hud-arrow" id="hud-arrow">&#10148;</div>
+        <div class="hud-arrow" id="hud-arrow" aria-label="Direcao do proximo aro">&#9650;</div>
       </div>`;
     this._race = root.querySelector(".hud");
     this._el = {
@@ -115,6 +115,6 @@ const Hud = {
     this._el.time.textContent = formatTime(data.elapsedMs);
     this._el.best.textContent = `Best ${data.bestLapMs != null ? formatTime(data.bestLapMs) : "--:--.--"}`;
     this._el.speed.textContent = `${Math.round(data.speed)} kn`;
-    this._el.arrow.style.transform = "translate(-50%, 0) rotate(" + data.arrowAngleRad + "rad)";
+    this._el.arrow.style.transform = "translate(-50%, -50%) rotate(" + data.arrowAngleRad + "rad)";
   },
 };

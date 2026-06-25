@@ -28,7 +28,7 @@
    ========================================================================= */
 const Skybox = {
   // ---- configuração ----
-  R: 1900,          // raio da cúpula (deixe bem maior que a cena)
+  R: 2400,          // raio da cúpula (deixe bem maior que a cena; o domo segue a câmera)
   starCount: 320,
 
   // paletas-chave: cor do topo e do horizonte ao longo do dia (t em 0..1)

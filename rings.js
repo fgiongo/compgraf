@@ -19,11 +19,12 @@ const Rings = {
       else brightness = 110;
 
       push();
-      translate(cp.position.x, waterY - ringRadius, cp.position.z);
-      // Orienta o aro perpendicular a tangente (gira em torno do eixo vertical).
+      // Centra o aro perto da linha d'agua para o barco passar pelo meio.
+      translate(cp.position.x, waterY - ringRadius * 0.6, cp.position.z);
+      // O torus do p5 ja nasce em pe (furo no eixo Z). Girar pelo yaw aponta o
+      // furo na direcao da pista, de modo que o barco atravessa o aro.
       const yaw = Math.atan2(cp.tangent.x, cp.tangent.z);
       rotateY(yaw);
-      rotateX(Math.PI / 2); // torus em pe
       noStroke();
       emissiveMaterial(20, brightness, 60);
       ambientMaterial(20, brightness, 60);

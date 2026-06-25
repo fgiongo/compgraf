@@ -73,8 +73,11 @@ vec3 toneMap(vec3 color) {
 void main() {
   if (uBoatSdfEnabled > 0.5) {
     vec2 rel = vWorldPosition.xz - uBoatPos;
-    float c = cos(-uBoatYaw);
-    float s = sin(-uBoatYaw);
+    // Inverso de rotateY(uBoatYaw) usado ao desenhar o casco: leva o ponto de
+    // mundo para o espaco local do barco. (Sinal positivo: a rotacao do recorte
+    // acompanha a proa, sem inverter.)
+    float c = cos(uBoatYaw);
+    float s = sin(uBoatYaw);
     vec2 local = vec2(c * rel.x - s * rel.y, s * rel.x + c * rel.y);
     vec2 uv = local / (2.0 * uBoatSdfHalfExtent) + 0.5;
     if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {

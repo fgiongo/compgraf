@@ -36,3 +36,36 @@ test("a tilted water surface induces roll", () => {
   }
   assert.ok(Math.abs(body.roll) > 0.01, `expected roll, got ${body.roll}`);
 });
+
+// Auto-nivelamento: numa agua plana, uma inclinacao imposta deve ser corrigida
+// pelos torques de empuxo (e nao divergir). Se algum sinal de torque estivesse
+// trocado, o angulo cresceria em vez de voltar a zero.
+test("buoyancy self-levels an imposed pitch on flat water", () => {
+  const body = createBoatBody({});
+  for (let i = 0; i < 120; i++) {
+    stepBoat(body, noControls, 1 / 60, flatWater, DEFAULT_BOAT_PARAMS); // assenta
+  }
+  body.pitch = 0.3;
+  body.pitchRate = 0;
+  for (let i = 0; i < 300; i++) {
+    stepBoat(body, noControls, 1 / 60, flatWater, DEFAULT_BOAT_PARAMS);
+  }
+  assert.ok(body.pitch < 0.12, `pitch should level toward 0, got ${body.pitch}`);
+  assert.ok(body.pitch > -0.3, `should not diverge/overshoot wildly, got ${body.pitch}`);
+});
+
+test("buoyancy self-levels an imposed roll on flat water", () => {
+  const body = createBoatBody({});
+  for (let i = 0; i < 120; i++) {
+    stepBoat(body, noControls, 1 / 60, flatWater, DEFAULT_BOAT_PARAMS);
+  }
+  body.roll = 0.3;
+  body.rollRate = 0;
+  for (let i = 0; i < 300; i++) {
+    stepBoat(body, noControls, 1 / 60, flatWater, DEFAULT_BOAT_PARAMS);
+  }
+  // Roll e mais suave que pitch (boca estreita: alavanca +/-16 vs +/-34), entao
+  // nivela mais devagar -- mas converge monotonicamente para zero sem divergir.
+  assert.ok(body.roll < 0.18, `roll should converge toward 0, got ${body.roll}`);
+  assert.ok(body.roll > 0, `should converge from above, not overshoot, got ${body.roll}`);
+});

@@ -168,7 +168,13 @@ const Game = {
 
   draw() {
     background(0);
+    // O domo do ceu acompanha a camera para parecer infinito: sem isso, ao se
+    // afastar da origem o barco sai de dentro da cupula.
+    const cam = this.sceneCamera;
+    push();
+    translate(cam.eyeX, cam.eyeY, cam.eyeZ);
     Skybox.draw(this.t);
+    pop();
     const scene = this._sceneArgs();
     if (this.state === this.STATE.RACING || this.state === this.STATE.FINISHED || this.state === this.STATE.COUNTDOWN) {
       const oceanArgs = {
