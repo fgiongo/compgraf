@@ -212,6 +212,20 @@ function applyBoatBaseTransform(boatMotion) {
   noStroke();
 }
 
+// Aplica a transformacao do barco a partir do corpo fisico (Task 9+).
+function applyBoatBodyTransform(body) {
+  const rootTransform = activeBoatConfig.rootTransform;
+  translate(body.pos.x, body.pos.y + rootTransform.position.y, body.pos.z);
+  rotateY(body.yaw);
+  rotateZ(body.roll);
+  rotateX(body.pitch);
+  rotateX(rootTransform.rotation.x);
+  rotateY(rootTransform.rotation.y);
+  rotateZ(rootTransform.rotation.z);
+  scale(rootTransform.scale);
+  noStroke();
+}
+
 function applyBoatWindowTransform() {
   const windowTransform = activeBoatConfig.parts.window.transform;
   translate(windowTransform.position.x, windowTransform.position.y, windowTransform.position.z);
@@ -269,6 +283,49 @@ function drawBoat(scene) {
   push();
   applyBoatWindowTransform();
 
+  boatWindowShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
+  boatWindowShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
+  boatWindowShader.setUniform("uLightDirectionView", lightDirectionView);
+  shader(boatWindowShader);
+  model(boatWindowModel);
+  pop();
+
+  resetShader();
+  pop();
+}
+
+function drawBoatFromBody(body, scene) {
+  if (!activeBoatConfig.enabled) return;
+  const boatAssets = getActiveBoatAssets();
+  const boatHullModel = boatAssets?.hullModel;
+  const boatWindowModel = boatAssets?.windowModel;
+  const activeMaterial = getActiveBoatMaterialConfig();
+  if (!boatHullModel || !boatWindowModel || !activeMaterial) return;
+
+  const lightDirectionView = worldDirectionToView(scene.camera, scene.lightDirection);
+  const hullTexture = boatAssets?.hullMaterialTextures?.[activeMaterial.id] ?? getFallbackHullTexture();
+  const isReflective = activeMaterial.shadingModel === "reflective";
+
+  push();
+  applyBoatBodyTransform(body);
+
+  boatHullShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
+  boatHullShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
+  boatHullShader.setUniform("uLightDirectionView", lightDirectionView);
+  boatHullShader.setUniform("uAlbedoTexture", hullTexture);
+  boatHullShader.setUniform("uSkyTop", normalizedColor(scene.sky.top));
+  boatHullShader.setUniform("uSkyHorizon", normalizedColor(scene.sky.bot));
+  boatHullShader.setUniform("uDarkness", scene.darkness);
+  boatHullShader.setUniform("uWaveTime", scene.waveTime);
+  boatHullShader.setUniform("uHullMaterialMode", isReflective ? BOAT_HULL_SHADING_REFLECTIVE : BOAT_HULL_SHADING_ALBEDO);
+  boatHullShader.setUniform("uReflectionStrength", isReflective ? BOAT_REFLECTIVE_STRENGTH : 0);
+  boatHullShader.setUniform("uReflectiveBaseColor", BOAT_REFLECTIVE_BASE_COLOR);
+  boatHullShader.setUniform("uRayMarchSteps", scene.boatRayMarchSteps);
+  shader(boatHullShader);
+  model(boatHullModel);
+
+  push();
+  applyBoatWindowTransform();
   boatWindowShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
   boatWindowShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
   boatWindowShader.setUniform("uLightDirectionView", lightDirectionView);
