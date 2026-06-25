@@ -253,6 +253,13 @@ function drawBoat(scene) {
   boatHullShader.setUniform("uSkyHorizon", normalizedColor(scene.sky.bot));
   boatHullShader.setUniform("uDarkness", scene.darkness);
   boatHullShader.setUniform("uWaveTime", scene.waveTime);
+  boatHullShader.setUniform("uWaveAmplitude", scene.waveAmplitude);
+  boatHullShader.setUniform("uLightDirectionWorld", [
+    scene.lightDirection.x,
+    scene.lightDirection.y,
+    scene.lightDirection.z,
+  ]);
+  setBoatReflectionCameraUniforms(boatHullShader, scene.camera);
   boatHullShader.setUniform(
     "uHullMaterialMode",
     isReflective ? BOAT_HULL_SHADING_REFLECTIVE : BOAT_HULL_SHADING_ALBEDO
@@ -278,6 +285,22 @@ function drawBoat(scene) {
 
   resetShader();
   pop();
+}
+
+function setBoatReflectionCameraUniforms(targetShader, camera) {
+  const eye = createVector(camera.eyeX, camera.eyeY, camera.eyeZ);
+  const center = createVector(camera.centerX, camera.centerY, camera.centerZ);
+  const up = createVector(camera.upX, camera.upY, camera.upZ);
+  const forward = p5.Vector.sub(center, eye).normalize();
+  const right = p5.Vector.cross(forward, up).normalize();
+  const cameraUp = p5.Vector.cross(right, forward).normalize();
+
+  // O shader do casco trabalha em view-space, mas o ray marching da agua usa a
+  // mesma superficie procedural do oceano em coordenadas de mundo.
+  targetShader.setUniform("uCameraPositionWorld", [eye.x, eye.y, eye.z]);
+  targetShader.setUniform("uCameraRightWorld", [right.x, right.y, right.z]);
+  targetShader.setUniform("uCameraUpWorld", [cameraUp.x, cameraUp.y, cameraUp.z]);
+  targetShader.setUniform("uCameraForwardWorld", [forward.x, forward.y, forward.z]);
 }
 
 function sampleBoatMotion(waveTime, waveAmplitude) {
