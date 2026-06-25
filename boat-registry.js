@@ -51,10 +51,11 @@ const BOAT_CATALOG = {
       halfWidth: 16,
     },
     // O footprint controla apenas o recorte do oceano sob o casco.
-    // O blur menor preserva mais o formato real da malha vista de cima.
+    // Aqui deixamos uma pequena folga extra para cobrir frestas entre a malha
+    // do barco e a agua, evitando que o ceu apareca por baixo do oceano.
     footprint: {
-      shrink: 0.98,
-      blurRadius: 1,
+      shrink: 0.6,
+      blurRadius: 10,
     },
     // Cada material do casco decide se usa textura de albedo ou se sera
     // construido diretamente no fragment shader como material refletivo.
