@@ -16,6 +16,14 @@ const DEFAULT_BOAT_PARAMS = {
   angularDamping: 4.0,
   pitchResponse: 0.9,
   rollResponse: 1.1,
+  // Pontos de prova no espaco local do casco (proa, popa, bombordo, estibordo, centro).
+  probes: [
+    { x: 0, z: 34 },   // proa
+    { x: 0, z: -34 },  // popa
+    { x: -16, z: 0 },  // bombordo
+    { x: 16, z: 0 },   // estibordo
+    { x: 0, z: 0 },    // centro
+  ],
 };
 
 function createBoatBody(initial) {
@@ -34,9 +42,44 @@ function forwardVector(yaw) {
   return { x: Math.sin(yaw), z: Math.cos(yaw) };
 }
 
-// Empuxo: substituido por implementacao real na Task 5.
+// Empuxo por pontos de prova. Cada ponto submerso empurra o barco para a
+// superficie; a assimetria entre proa/popa e bombordo/estibordo gera pitch/roll.
 function applyBuoyancy(body, dt, sampleWaterHeight, params) {
-  // no-op stub
+  const cosY = Math.cos(body.yaw);
+  const sinY = Math.sin(body.yaw);
+
+  let verticalForce = params.gravity; // gravidade puxa para baixo (y+ e para baixo)
+  let pitchTorque = 0;
+  let rollTorque = 0;
+
+  for (const probe of params.probes) {
+    // Offset local -> mundo (rotaciona pelo yaw no plano XZ).
+    const worldX = body.pos.x + probe.x * cosY + probe.z * sinY;
+    const worldZ = body.pos.z - probe.x * sinY + probe.z * cosY;
+    const waterY = sampleWaterHeight(worldX, worldZ);
+
+    // Submerso quando o ponto esta abaixo da agua: em p5, "abaixo" = y maior
+    // que waterY (y+ para baixo). submersion > 0 gera empuxo para cima (y-).
+    const submersion = body.pos.y - waterY;
+    if (submersion > 0) {
+      const lift = submersion * params.buoyancyStiffness;
+      verticalForce -= lift; // empurra para cima (diminui y)
+      // Torques: proa/popa (z) -> pitch; bombordo/estibordo (x) -> roll.
+      pitchTorque += -lift * probe.z * params.pitchResponse * 0.001;
+      rollTorque += lift * probe.x * params.rollResponse * 0.001;
+    }
+  }
+
+  // Vertical: integra com amortecimento.
+  body.vel.y += (verticalForce / params.mass) * dt;
+  body.vel.y -= body.vel.y * Math.min(params.verticalDamping * dt, 1);
+  body.pos.y += body.vel.y * dt;
+
+  // Pitch/roll: relaxam para o alvo dado pelos torques, com amortecimento.
+  body.pitch += pitchTorque * dt;
+  body.roll += rollTorque * dt;
+  body.pitch -= body.pitch * Math.min(params.angularDamping * dt, 1);
+  body.roll -= body.roll * Math.min(params.angularDamping * dt, 1);
 }
 
 function stepBoat(body, controls, dt, sampleWaterHeight, params) {
