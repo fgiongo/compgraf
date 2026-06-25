@@ -10,36 +10,25 @@
     <main id="canvas-container" aria-label="Demonstração 3D de um oceano"></main>
     <div class="spinner" role="status" aria-label="Carregando"></div>
 
-    <div class="controls">
-      <div class="time-control">
-        <button id="play" aria-label="Pausar ciclo">❚❚</button>
-        <input type="range" id="time" min="0" max="1000" value="120"
-               aria-label="Hora do dia" />
-        <span id="clock">06:00</span>
-      </div>
-
-      <label class="amplitude-control" for="wave-amplitude">
-        <span>Amplitude</span>
-        <input type="range" id="wave-amplitude" min="0" max="200" value="100" />
-        <output id="wave-amplitude-value" for="wave-amplitude">100%</output>
-      </label>
-
-      <label class="select-control" for="boat-select">
-        <span>Barco</span>
-        <select id="boat-select" aria-label="Selecionar embarcação"></select>
-      </label>
-
-      <label class="select-control" for="boat-material-select">
-        <span>Material</span>
-        <select id="boat-material-select" aria-label="Selecionar material do casco"></select>
-      </label>
-    </div>
+    <div id="menu-root"></div>
+    <div id="hud-root"></div>
 
     <script src="vendor/p5/p5.min.js"></script>
     <script src="skybox.js"></script>
     <script src="ocean.js"></script>
     <script src="boat-registry.js"></script>
     <script src="boat.js"></script>
+    <script src="prng.js"></script>
+    <script src="track.js"></script>
+    <script src="checkpoints.js"></script>
+    <script src="boat-physics.js"></script>
+    <script src="input-map.js"></script>
+    <script src="input.js"></script>
+    <script src="camera-math.js"></script>
+    <script src="camera.js"></script>
+    <script src="rings.js"></script>
+    <script src="hud.js"></script>
+    <script src="game.js"></script>
     <script src="index.js"></script>
   </body>
 </html>

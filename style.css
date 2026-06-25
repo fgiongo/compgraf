@@ -141,6 +141,13 @@ canvas {
   }
 }
 
+#menu-root,
+#hud-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
 .spinner {
   position: fixed;
   top: 50%;
