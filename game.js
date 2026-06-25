@@ -25,21 +25,52 @@ const Game = {
   raceStartMs: 0,
   lapStartMs: 0,
   bestLapMs: null,
+  bestTotalMs: null,
+
+  countdownMs: 0,
+  COUNTDOWN_TOTAL: 3200,
 
   setup() {
     this.state = this.STATE.MENU;
     Input.setup();
     Hud.setup();
-    Hud.showMenu();
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && this.state === this.STATE.MENU) this.startRace();
+    this._openMenu();
+  },
+
+  _openMenu() {
+    this.setState(this.STATE.MENU);
+    Hud.showMenu({
+      boatOptions: getBoatOptions().filter((o) => o.id !== BOAT_ID_NONE),
+      materialOptions: getActiveBoatMaterialOptions(),
+      seedText: String(this.seed),
+      bestText: this.bestTotalMs != null ? `Melhor tempo: ${this._fmt(this.bestTotalMs)}` : "",
+    }, {
+      onBoatChange: (boatId) => { setActiveBoat(boatId); Hud.setMaterialOptions(getActiveBoatMaterialOptions(), getActiveBoatMaterialId()); },
+      onStart: (cfg) => this._startFromMenu(cfg),
     });
+  },
+
+  _fmt(ms) { const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), c = Math.floor((ms % 1000) / 10); return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(c).padStart(2,"0")}`; },
+
+  _startFromMenu(cfg) {
+    this.LAPS = cfg.laps;
+    setActiveBoat(cfg.boatId);
+    setActiveBoatMaterial(cfg.materialId);
+    setupBoat(); // reconstroi a SDF do casco escolhido
+    this.waveAmplitude = cfg.roughness;
+    this.seed = /^\d+$/.test(cfg.seedText) ? Number(cfg.seedText) : hashStringToSeed(cfg.seedText);
+    this.startRace();
+    this._beginCountdown();
+  },
+
+  _beginCountdown() {
+    this.countdownMs = this.COUNTDOWN_TOTAL;
+    this.setState(this.STATE.COUNTDOWN);
   },
 
   setState(state) {
     this.state = state;
-    if (state === this.STATE.MENU) Hud.showMenu();
-    else Hud.hideAll();
+    if (state !== this.STATE.MENU) Hud.hideAll();
   },
 
   startRace() {
@@ -56,11 +87,7 @@ const Game = {
     this.boat.yaw = Math.atan2(start.tangent.x, start.tangent.z);
     this.chaseCam.snap(this.boat);
     this._prevBoatXZ = { x: this.boat.pos.x, z: this.boat.pos.z };
-    this.raceStartMs = millis();
-    this.lapStartMs = this.raceStartMs;
     this.bestLapMs = null;
-    Hud.hideAll();
-    this.setState(this.STATE.RACING);
   },
 
   waterHeightAt(x, z) {
@@ -70,6 +97,17 @@ const Game = {
 
   update(dt) {
     this.t = (this.t + this.CYCLE_SPEED) % 1;
+    if (this.state === this.STATE.COUNTDOWN) {
+      this.chaseCam.update(this.boat, dt); // camera ja olhando o barco parado
+      this.countdownMs -= dt * 1000;
+      Hud.updateCountdown(Math.max(0, this.countdownMs));
+      if (this.countdownMs <= 0) {
+        this.raceStartMs = millis();
+        this.lapStartMs = this.raceStartMs;
+        this.setState(this.STATE.RACING);
+      }
+      return;
+    }
     if (this.state === this.STATE.RACING) {
       const controls = Input.read();
       this._accum += dt;
@@ -87,7 +125,16 @@ const Game = {
         if (this.bestLapMs == null || lapMs < this.bestLapMs) this.bestLapMs = lapMs;
         this.lapStartMs = millis();
       }
-      if (result.finished) { this.totalMs = millis() - this.raceStartMs; this.setState(this.STATE.FINISHED); }
+      if (result.finished) {
+        this.totalMs = millis() - this.raceStartMs;
+        if (this.bestTotalMs == null || this.totalMs < this.bestTotalMs) this.bestTotalMs = this.totalMs;
+        this.setState(this.STATE.FINISHED);
+        Hud.hideAll();
+        Hud.showFinish(
+          { totalMs: this.totalMs, bestLapMs: this.bestLapMs, bestText: `Melhor tempo da sessao: ${this._fmt(this.bestTotalMs)}` },
+          { onRestart: () => { this.startRace(); this._beginCountdown(); }, onMenu: () => this._openMenu() }
+        );
+      }
       const cp = this.track.checkpoints[this.race.currentIndex];
       const toCpX = cp.position.x - this.boat.pos.x;
       const toCpZ = cp.position.z - this.boat.pos.z;
@@ -123,7 +170,7 @@ const Game = {
     background(0);
     Skybox.draw(this.t);
     const scene = this._sceneArgs();
-    if (this.state === this.STATE.RACING || this.state === this.STATE.FINISHED) {
+    if (this.state === this.STATE.RACING || this.state === this.STATE.FINISHED || this.state === this.STATE.COUNTDOWN) {
       const oceanArgs = {
         waveTime: scene.waveTime, waveAmplitude: scene.waveAmplitude, camera: scene.camera,
         lightDirection: scene.lightDirection, lightColor: scene.lightColor, ambientColor: scene.ambientColor,

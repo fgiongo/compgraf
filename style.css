@@ -148,6 +148,10 @@ canvas {
   pointer-events: none;
 }
 
+#menu-root:not(:empty) {
+  pointer-events: auto;
+}
+
 .spinner {
   position: fixed;
   top: 50%;
@@ -176,3 +180,10 @@ canvas {
 .hud-bottom { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
 .hud-pill { padding: 8px 14px; border-radius: 999px; background: rgb(8 16 28 / 60%); border: 1px solid rgb(255 255 255 / 14%); backdrop-filter: blur(8px); font-variant-numeric: tabular-nums; font-size: 14px; }
 .hud-arrow { position: fixed; top: 50%; left: 50%; transform-origin: center; font-size: 42px; color: #6cff8a; text-shadow: 0 0 12px rgb(0 0 0 / 60%); margin-top: -90px; }
+.menu { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgb(4 12 22 / 55%); backdrop-filter: blur(10px); color: #eaf4ff; font-family: system-ui, sans-serif; }
+.menu h1 { font-size: 44px; margin: 0 0 8px; letter-spacing: 1px; }
+.menu label { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.menu select, .menu input { padding: 6px 10px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 18%); background: rgb(255 255 255 / 8%); color: inherit; font: inherit; }
+.menu button { margin-top: 8px; padding: 10px 22px; border-radius: 999px; border: 1px solid rgb(108 255 138 / 50%); background: rgb(108 255 138 / 18%); color: #eaffe9; font-size: 16px; cursor: pointer; }
+.menu-hint, .menu-best, .menu-result { font-size: 13px; opacity: 0.85; margin: 2px; }
+.countdown { position: fixed; top: 42%; left: 50%; transform: translate(-50%, -50%); font-size: 96px; font-weight: 700; color: #fff; text-shadow: 0 0 24px rgb(0 0 0 / 70%); font-family: system-ui, sans-serif; }
