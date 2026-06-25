@@ -7,10 +7,9 @@ let activeBoatConfig = getBoatConfig(BOAT_ID_NONE);
 let activeBoatMaterialId = null;
 const boatAssetsById = {};
 
-// Mascara de footprint: silhueta do casco vista de cima,
-// rasterizada uma vez num canvas 2D. boatFootprintHalf* guardam a meia-extensao
-// em unidades de mundo, usada para mapear XZ -> UV no shader do oceano.
-let boatFootprintMask;
+// SDF de footprint: silhueta do casco vista de cima rasterizada e convertida em
+// campo de distancia. boatFootprintHalf* guardam a meia-extensao em unidades de
+// mundo, usada para mapear XZ -> UV no shader do oceano.
 let boatFootprintSdf = null;
 let boatFootprintHalfX = 1;
 let boatFootprintHalfZ = 1;
@@ -129,7 +128,6 @@ function getActiveBoatAssets() {
 // 2D, a partir dos triangulos do modelo carregado. Branco = barco. Roda
 // uma vez; a forma e estatica (o barco nao gira em torno do eixo vertical).
 function buildBoatFootprintMask() {
-  boatFootprintMask = null;
   boatFootprintSdf = null;
   boatFootprintHalfX = 1;
   boatFootprintHalfZ = 1;
@@ -214,26 +212,6 @@ function buildBoatFootprintMask() {
   }
   sdfImage.updatePixels();
   boatFootprintSdf = sdfImage;
-
-  boatFootprintMask = graphics;
-}
-
-// Aplica a transformacao do barco (posicao, balanco, rotacoes e escala).
-function applyBoatBaseTransform(boatMotion) {
-  const rootTransform = activeBoatConfig.rootTransform;
-
-  translate(
-    boatMotion.position.x,
-    boatMotion.position.y + rootTransform.position.y,
-    boatMotion.position.z
-  );
-  rotateZ(boatMotion.roll);
-  rotateX(boatMotion.pitch);
-  rotateX(rootTransform.rotation.x);
-  rotateY(rootTransform.rotation.y);
-  rotateZ(rootTransform.rotation.z);
-  scale(rootTransform.scale);
-  noStroke();
 }
 
 // Aplica a transformacao do barco a partir do corpo fisico (Task 9+).
@@ -257,65 +235,6 @@ function applyBoatWindowTransform() {
   rotateY(windowTransform.rotation.y);
   rotateZ(windowTransform.rotation.z);
   scale(windowTransform.scale);
-}
-
-function drawBoat(scene) {
-  if (!activeBoatConfig.enabled) {
-    return;
-  }
-
-  const boatAssets = getActiveBoatAssets();
-  const boatHullModel = boatAssets?.hullModel;
-  const boatWindowModel = boatAssets?.windowModel;
-  const activeMaterial = getActiveBoatMaterialConfig();
-
-  if (!boatHullModel || !boatWindowModel || !activeMaterial) {
-    return;
-  }
-
-  const lightDirectionView = worldDirectionToView(scene.camera, scene.lightDirection);
-  const hullTexture = boatAssets?.hullMaterialTextures?.[activeMaterial.id] ?? getFallbackHullTexture();
-  const isReflective = activeMaterial.shadingModel === "reflective";
-  // O barco agora le a mesma agua do oceano para ganhar altura e inclinacao coerentes.
-  const boatMotion = sampleBoatMotion(scene.waveTime, scene.waveAmplitude);
-
-  push();
-  applyBoatBaseTransform(boatMotion);
-
-  boatHullShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
-  boatHullShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
-  boatHullShader.setUniform("uLightDirectionView", lightDirectionView);
-  boatHullShader.setUniform("uAlbedoTexture", hullTexture);
-  // O casco recebe o mesmo ceu procedural do oceano para refletir o ambiente.
-  boatHullShader.setUniform("uSkyTop", normalizedColor(scene.sky.top));
-  boatHullShader.setUniform("uSkyHorizon", normalizedColor(scene.sky.bot));
-  boatHullShader.setUniform("uDarkness", scene.darkness);
-  boatHullShader.setUniform("uWaveTime", scene.waveTime);
-  boatHullShader.setUniform(
-    "uHullMaterialMode",
-    isReflective ? BOAT_HULL_SHADING_REFLECTIVE : BOAT_HULL_SHADING_ALBEDO
-  );
-  boatHullShader.setUniform(
-    "uReflectionStrength",
-    isReflective ? BOAT_REFLECTIVE_STRENGTH : 0
-  );
-  boatHullShader.setUniform("uReflectiveBaseColor", BOAT_REFLECTIVE_BASE_COLOR);
-  boatHullShader.setUniform("uRayMarchSteps", scene.boatRayMarchSteps);
-  shader(boatHullShader);
-  model(boatHullModel);
-
-  push();
-  applyBoatWindowTransform();
-
-  boatWindowShader.setUniform("uAmbientColor", normalizedColor(scene.ambientColor));
-  boatWindowShader.setUniform("uLightColor", normalizedColor(scene.lightColor));
-  boatWindowShader.setUniform("uLightDirectionView", lightDirectionView);
-  shader(boatWindowShader);
-  model(boatWindowModel);
-  pop();
-
-  resetShader();
-  pop();
 }
 
 function drawBoatFromBody(body, scene) {
@@ -359,27 +278,6 @@ function drawBoatFromBody(body, scene) {
 
   resetShader();
   pop();
-}
-
-function sampleBoatMotion(waveTime, waveAmplitude) {
-  const centerBase = activeBoatConfig.rootTransform.position;
-  const waveSample = activeBoatConfig.waveSample;
-  const center = sampleOceanSurface(centerBase.x, centerBase.z, waveTime, waveAmplitude);
-
-  // Amostramos frente/tras e esquerda/direita para aproximar a inclinacao local da agua.
-  const bow = sampleOceanSurface(centerBase.x, centerBase.z + waveSample.halfLength, waveTime, waveAmplitude);
-  const stern = sampleOceanSurface(centerBase.x, centerBase.z - waveSample.halfLength, waveTime, waveAmplitude);
-  const port = sampleOceanSurface(centerBase.x - waveSample.halfWidth, centerBase.z, waveTime, waveAmplitude);
-  const starboard = sampleOceanSurface(centerBase.x + waveSample.halfWidth, centerBase.z, waveTime, waveAmplitude);
-
-  const pitch = atan2(stern.y - bow.y, waveSample.halfLength * 2.0);
-  const roll = atan2(starboard.y - port.y, waveSample.halfWidth * 2.0);
-
-  return {
-    position: center,
-    pitch,
-    roll,
-  };
 }
 
 function sampleOceanSurface(baseX, baseZ, waveTime, waveAmplitude) {
@@ -429,20 +327,3 @@ function getActiveBoatSdf() {
   return { tex: boatFootprintSdf, halfExtentX: boatFootprintHalfX, halfExtentZ: boatFootprintHalfZ };
 }
 
-function getActiveBoatFootprint(waveTime, waveAmplitude) {
-  if (!activeBoatConfig.enabled || !boatFootprintMask) {
-    return null;
-  }
-
-  const rootPosition = activeBoatConfig.rootTransform.position;
-  const center = sampleOceanSurface(rootPosition.x, rootPosition.z, waveTime, waveAmplitude);
-
-  return {
-    mask: boatFootprintMask,
-    center,
-    halfExtent: {
-      x: boatFootprintHalfX,
-      z: boatFootprintHalfZ,
-    },
-  };
-}

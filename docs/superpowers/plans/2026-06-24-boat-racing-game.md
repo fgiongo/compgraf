@@ -1439,7 +1439,7 @@ The rest of `main()` is unchanged (it already builds `worldPosition = toP5(posit
 
 - [ ] **Step 2: Recenter the mesh in `ocean.js`**
 
-In `drawOcean(scene)` (in `ocean.js`), add the world offset and translate the mesh to the snapped boat center. Modify `drawOcean`:
+In `drawOcean(scene)` (in `ocean.js`), add the world offset uniform. The mesh is NOT translated by the model matrix — the shader's `uWorldOffset` already places each vertex in world space, so translating again would double the offset (the ocean would drift at 2× the boat's displacement). Modify `drawOcean`:
 ```js
 function drawOcean(scene) {
   const sky = scene.sky;
@@ -1466,7 +1466,8 @@ function drawOcean(scene) {
 
   setBoatMaskUniforms(scene);
 
-  translate(snappedX, 0, snappedZ);
+  // NAO usar translate aqui: o uWorldOffset no shader ja posiciona os vertices
+  // em espaco de mundo. Um translate adicional dobraria o deslocamento.
   model(oceanGeometry);
   resetShader();
   pop();
@@ -1692,7 +1693,9 @@ function buildSdfFromMask(maskAlpha, size) {
   pass(inside);
   pass(outside);
   const sdf = new Float32Array(size * size);
-  for (let i = 0; i < size * size; i++) sdf[i] = outside[i] - inside[i];
+  // Negativo dentro do casco, positivo fora: inside[i] e a distancia ate um
+  // pixel interno (0 quando ja interno), outside[i] a distancia ate um externo.
+  for (let i = 0; i < size * size; i++) sdf[i] = inside[i] - outside[i];
   return sdf;
 }
 
