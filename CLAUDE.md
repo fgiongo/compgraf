@@ -99,10 +99,11 @@ height at arbitrary world positions. This is used in two places: the buoyancy
 probes in `boat-physics.js` (which calls `sampleOceanSurface` via `Game.waterHeightAt`)
 and the boat's real-time SDF footprint positioning. The wave constants (`TWO_PI`,
 `GRAVITY`, the per-wave direction/wavelength/amplitude/steepness/phase, and the
-`q = steepness / (WAVE_COUNT * k * amplitude)` formula) appear in **three places**:
-`shaders/ocean.vert`, `shaders/boat.vert`, and `boat.js`. If you change the wave
-model in one, change it in all three or the boat will float above/through the
-visible water.
+`q = steepness / (WAVE_COUNT * k * amplitude)` formula) appear in **two places**:
+`shaders/ocean.vert` and `boat.js`. If you change the wave model in one, change it
+in both or the boat will float above/through the visible water. (Note: `shaders/boat.vert`
+does **not** displace vertices — the hull is a rigid model positioned by the JS
+physics, so it carries no wave code.)
 
 ### Ocean ↔ boat footprint SDF
 
@@ -157,7 +158,8 @@ count controlled by `BOAT_RAY_MARCH_STEPS_LOW`).
 
 - `shaders/ocean.vert` / `ocean.frag` — Gerstner displacement + procedural water
   shading (Fresnel, sky reflection, sun/moon glint), plus the footprint cut.
-- `shaders/boat.vert` — shared vertex shader for hull and window.
+- `shaders/boat.vert` — shared vertex shader for hull and window (plain
+  model-view-projection pass-through; no wave displacement).
 - `shaders/boat.frag` — hull: albedo or reflective material modes.
 - `shaders/boat-window.frag` — stylized blue glass with Fresnel.
 
