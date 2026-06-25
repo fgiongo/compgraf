@@ -67,7 +67,8 @@ function drawOcean(scene) {
 
   setBoatMaskUniforms(scene);
 
-  translate(snappedX, 0, snappedZ);
+  // NAO usar translate aqui: o uWorldOffset no shader ja posiciona os vertices
+  // em espaco de mundo. Um translate adicional dobraria o deslocamento.
   model(oceanGeometry);
   resetShader();
   pop();
