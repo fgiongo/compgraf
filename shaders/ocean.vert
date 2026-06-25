@@ -6,6 +6,7 @@ uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
 uniform float uWaveTime;
 uniform float uWaveAmplitude;
+uniform vec2 uWorldOffset;
 
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
@@ -63,8 +64,9 @@ vec3 toP5(vec3 vector) {
 }
 
 void main() {
-  vec2 basePosition = aPosition.xz;
-  vec3 position = aPosition;
+  vec2 worldXZ = aPosition.xz + uWorldOffset;
+  vec2 basePosition = worldXZ;
+  vec3 position = vec3(worldXZ.x, aPosition.y, worldXZ.y);
   vec3 tangentX = vec3(1.0, 0.0, 0.0);
   vec3 tangentZ = vec3(0.0, 0.0, 1.0);
   float crest = 0.0;

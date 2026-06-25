@@ -44,11 +44,17 @@ function createOceanGeometry() {
 
 function drawOcean(scene) {
   const sky = scene.sky;
+  const step = OCEAN_SIZE / OCEAN_DETAIL;
+  // Snap ao passo do grid para a superficie nao "nadar" ao seguir o barco.
+  const center = scene.center || { x: 0, z: 0 };
+  const snappedX = Math.round(center.x / step) * step;
+  const snappedZ = Math.round(center.z / step) * step;
 
   push();
   noStroke();
   shader(oceanShader);
 
+  oceanShader.setUniform("uWorldOffset", [snappedX, snappedZ]);
   oceanShader.setUniform("uWaveTime", scene.waveTime);
   oceanShader.setUniform("uWaveAmplitude", scene.waveAmplitude);
   oceanShader.setUniform("uCameraPosition", cameraPosition(scene.camera));
@@ -61,6 +67,7 @@ function drawOcean(scene) {
 
   setBoatMaskUniforms(scene);
 
+  translate(snappedX, 0, snappedZ);
   model(oceanGeometry);
   resetShader();
   pop();

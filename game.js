@@ -80,6 +80,7 @@ const Game = {
         waveTime: scene.waveTime, waveAmplitude: scene.waveAmplitude, camera: scene.camera,
         lightDirection: scene.lightDirection, lightColor: scene.lightColor, ambientColor: scene.ambientColor,
         sky: scene.sky, darkness: scene.darkness,
+        center: { x: this.boat.pos.x, z: this.boat.pos.z },
       };
       drawOcean(oceanArgs);
       drawBoatFromBody(this.boat, scene);
