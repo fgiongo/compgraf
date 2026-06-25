@@ -102,6 +102,7 @@ const Game = {
         lightDirection: scene.lightDirection, lightColor: scene.lightColor, ambientColor: scene.ambientColor,
         sky: scene.sky, darkness: scene.darkness,
         center: { x: this.boat.pos.x, z: this.boat.pos.z },
+        boat: this.boat,
       };
       drawOcean(oceanArgs);
       drawBoatFromBody(this.boat, scene);

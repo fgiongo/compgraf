@@ -11,6 +11,7 @@ const boatAssetsById = {};
 // rasterizada uma vez num canvas 2D. boatFootprintHalf* guardam a meia-extensao
 // em unidades de mundo, usada para mapear XZ -> UV no shader do oceano.
 let boatFootprintMask;
+let boatFootprintSdf = null;
 let boatFootprintHalfX = 1;
 let boatFootprintHalfZ = 1;
 const BOAT_FOOTPRINT_RES = 256;
@@ -129,6 +130,7 @@ function getActiveBoatAssets() {
 // uma vez; a forma e estatica (o barco nao gira em torno do eixo vertical).
 function buildBoatFootprintMask() {
   boatFootprintMask = null;
+  boatFootprintSdf = null;
   boatFootprintHalfX = 1;
   boatFootprintHalfZ = 1;
 
@@ -190,6 +192,28 @@ function buildBoatFootprintMask() {
 
   // Borda suave para o oceano poder fazer um feather no contorno sem virar oval.
   graphics.filter(BLUR, footprint.blurRadius ?? 1);
+
+  // Constroi o SDF a partir da silhueta rasterizada para recorte em tempo real.
+  graphics.loadPixels();
+  const size = BOAT_FOOTPRINT_RES;
+  const alpha = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) alpha[i] = graphics.pixels[i * 4] / 255; // canal R
+  const sdf = buildSdfFromMask(Array.from(alpha), size);
+
+  // Normaliza distancia para 0..1 e grava num p5.Image (canal R) para o shader.
+  const sdfImage = createImage(size, size);
+  sdfImage.loadPixels();
+  const SDF_RANGE = 24; // pixels mapeados a 0..1 (>0.5 = fora, <0.5 = dentro)
+  for (let i = 0; i < size * size; i++) {
+    const normalized = Math.max(0, Math.min(1, sdf[i] / (2 * SDF_RANGE) + 0.5));
+    const v = Math.round(normalized * 255);
+    sdfImage.pixels[i * 4] = v;
+    sdfImage.pixels[i * 4 + 1] = v;
+    sdfImage.pixels[i * 4 + 2] = v;
+    sdfImage.pixels[i * 4 + 3] = 255;
+  }
+  sdfImage.updatePixels();
+  boatFootprintSdf = sdfImage;
 
   boatFootprintMask = graphics;
 }
@@ -398,6 +422,11 @@ function worldDirectionToView(camera, direction) {
     p5.Vector.dot(light, cameraUp),
     -p5.Vector.dot(light, forward),
   ];
+}
+
+function getActiveBoatSdf() {
+  if (!activeBoatConfig.enabled || !boatFootprintSdf) return null;
+  return { tex: boatFootprintSdf, halfExtentX: boatFootprintHalfX, halfExtentZ: boatFootprintHalfZ };
 }
 
 function getActiveBoatFootprint(waveTime, waveAmplitude) {

@@ -75,20 +75,14 @@ function drawOcean(scene) {
 }
 
 function setBoatMaskUniforms(scene) {
-  // O recorte do oceano depende da embarcacao ativa.
-  const footprint = getActiveBoatFootprint(scene.waveTime, scene.waveAmplitude);
-  const footprintEnabled = Boolean(footprint);
-  oceanShader.setUniform("uBoatFootprintEnabled", footprintEnabled ? 1 : 0);
-  if (!footprintEnabled) {
-    return;
-  }
-
-  oceanShader.setUniform("uBoatFootprintTex", footprint.mask);
-  oceanShader.setUniform("uBoatFootprintCenter", [footprint.center.x, footprint.center.z]);
-  oceanShader.setUniform("uBoatFootprintHalfExtent", [
-    footprint.halfExtent.x,
-    footprint.halfExtent.z,
-  ]);
+  const sdf = getActiveBoatSdf();
+  const enabled = Boolean(sdf) && Boolean(scene.boat);
+  oceanShader.setUniform("uBoatSdfEnabled", enabled ? 1 : 0);
+  if (!enabled) return;
+  oceanShader.setUniform("uBoatSdfTex", sdf.tex);
+  oceanShader.setUniform("uBoatPos", [scene.boat.pos.x, scene.boat.pos.z]);
+  oceanShader.setUniform("uBoatYaw", scene.boat.yaw);
+  oceanShader.setUniform("uBoatSdfHalfExtent", [sdf.halfExtentX, sdf.halfExtentZ]);
 }
 
 function cameraPosition(camera) {
