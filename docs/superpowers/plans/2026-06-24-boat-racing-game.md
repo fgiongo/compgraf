@@ -1617,13 +1617,16 @@ Deliverable: the ocean cutout follows the boat as it moves and rotates, using a
 precomputed signed distance field of the hull sampled with an inverse transform.
 
 **Files:**
-- Modify: `boat.js`, `shaders/ocean.frag`, `ocean.js`, `game.js`
+- Create: `sdf.js` (pure)
+- Modify: `boat.js`, `shaders/ocean.frag`, `ocean.js`, `game.js`, `index.html`
 - Test: `tests/sdf.test.js`
 
 **Interfaces:**
-- Produces (pure helper in `boat.js`, also exported for test): `buildSdfFromMask(maskAlpha: Uint8Array|number[], size: number) -> Float32Array` — converts a binary silhouette (alpha>0.5 = inside) into a signed distance field in pixels (negative inside, positive outside), via two-pass chamfer distance. Exposed via the dual-mode export footer.
-- Produces (`boat.js`): `getActiveBoatSdf()` returns `{tex, halfExtentX, halfExtentZ}` or null. `boat.js` builds the SDF once and uploads it to a p5 image/texture.
+- Produces (pure `sdf.js`): `buildSdfFromMask(maskAlpha: Uint8Array|number[], size: number) -> Float32Array` — converts a binary silhouette (alpha>0.5 = inside) into a signed distance field in pixels (negative inside, positive outside), via two-pass chamfer distance. Dual-mode export footer; in the browser it is a global consumed by `boat.js`.
+- Produces (`boat.js`): `getActiveBoatSdf()` returns `{tex, halfExtentX, halfExtentZ}` or null. `boat.js` builds the SDF once (using the global `buildSdfFromMask`) and uploads it to a p5 image/texture.
 - Produces (ocean shader): cut driven by `uBoatSdfTex`, `uBoatPos`, `uBoatYaw`, `uBoatSdfHalfExtent`.
+
+> **Why a separate `sdf.js`:** `boat.js` cannot be `require`d standalone under Node — at load it evaluates `getBoatConfig(BOAT_ID_NONE)`, globals defined in `boat-registry.js`, which would throw a `ReferenceError`. Keeping the pure distance-field helper in its own module follows the established dual-mode pattern (like `prng.js`/`track.js`) and keeps the test clean.
 
 - [ ] **Step 1: Write the failing test for the distance field**
 
@@ -1632,7 +1635,7 @@ Create `tests/sdf.test.js`:
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert");
-const { buildSdfFromMask } = require("../boat.js");
+const { buildSdfFromMask } = require("../sdf.js");
 
 test("center of a filled disc is most negative; outside is positive", () => {
   const size = 32;
@@ -1652,17 +1655,17 @@ test("center of a filled disc is most negative; outside is positive", () => {
 });
 ```
 
-This requires `boat.js` to export `buildSdfFromMask` under Node. Because `boat.js` references p5 globals at load, guard the export so requiring it under Node does not execute browser code: put `buildSdfFromMask` and the export footer at the very top of `boat.js` (before any p5 usage), and make the footer export only that pure function.
-
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/sdf.test.js`
-Expected: FAIL — `buildSdfFromMask is not a function` (or module load error).
+Expected: FAIL — `Cannot find module '../sdf.js'`.
 
-- [ ] **Step 3: Implement `buildSdfFromMask` in `boat.js`**
+- [ ] **Step 3: Create the pure `sdf.js` module**
 
-At the **top** of `boat.js` (right after `"use strict";`), add the pure helper and a guarded export:
+Create `sdf.js`:
 ```js
+"use strict";
+
 // Campo de distancia assinado (SDF) a partir de uma mascara binaria.
 // Chamfer distance em duas passadas. Negativo dentro, positivo fora (em pixels).
 function buildSdfFromMask(maskAlpha, size) {
@@ -1703,7 +1706,15 @@ if (typeof module !== "undefined" && module.exports) {
 Run: `node --test tests/sdf.test.js`
 Expected: PASS — 1 test.
 
-- [ ] **Step 5: Build the SDF texture in `boat.js`**
+- [ ] **Step 5: Register `sdf.js` in `index.html`**
+
+Insert the script tag immediately before `boat.js` (it must load before `boat.js` runs `setupBoat()`):
+```html
+    <script src="sdf.js"></script>
+    <script src="boat.js"></script>
+```
+
+- [ ] **Step 6: Build the SDF texture in `boat.js`**
 
 In `buildBoatFootprintMask()` (which already rasterizes the silhouette into `graphics`), after the blur, read pixels, build the SDF, and pack it into a displayable texture. Append before `boatFootprintMask = graphics;`:
 ```js
@@ -1741,7 +1752,7 @@ function getActiveBoatSdf() {
 }
 ```
 
-- [ ] **Step 6: Replace the cut in `shaders/ocean.frag`**
+- [ ] **Step 7: Replace the cut in `shaders/ocean.frag`**
 
 Replace the footprint uniforms block (lines ~16-19) with:
 ```glsl
@@ -1768,7 +1779,7 @@ Replace the footprint discard block at the start of `main()` with an SDF cut tha
   }
 ```
 
-- [ ] **Step 7: Upload SDF uniforms in `ocean.js`**
+- [ ] **Step 8: Upload SDF uniforms in `ocean.js`**
 
 Replace `setBoatMaskUniforms(scene)` with:
 ```js
@@ -1784,19 +1795,19 @@ function setBoatMaskUniforms(scene) {
 }
 ```
 
-- [ ] **Step 8: Pass the boat to the ocean in `game.js`**
+- [ ] **Step 9: Pass the boat to the ocean in `game.js`**
 
 In `game.js` `draw()`, add `boat: this.boat` to `oceanArgs`.
 
-- [ ] **Step 9: Manual verification**
+- [ ] **Step 10: Manual verification**
 
 Run the page, press Enter, drive and turn sharply.
 Expected: the water is cut out cleanly around the hull at every heading (no sea poking through the boat as it rotates); the cut translates and rotates with the boat; no visible square or halo around it.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add boat.js ocean.js shaders/ocean.frag tests/sdf.test.js
+git add sdf.js boat.js ocean.js shaders/ocean.frag index.html tests/sdf.test.js
 git commit -m "feat: real-time SDF ocean cutout that follows the boat"
 ```
 
@@ -2142,7 +2153,7 @@ Append:
 .menu select, .menu input { padding: 6px 10px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 18%); background: rgb(255 255 255 / 8%); color: inherit; font: inherit; }
 .menu button { margin-top: 8px; padding: 10px 22px; border-radius: 999px; border: 1px solid rgb(108 255 138 / 50%); background: rgb(108 255 138 / 18%); color: #eaffe9; font-size: 16px; cursor: pointer; }
 .menu-hint, .menu-best, .menu-result { font-size: 13px; opacity: 0.85; margin: 2px; }
-.countdown { position: fixed; top: 42%; left: 50%; transform: transl(-50%, -50%); transform: translate(-50%, -50%); font-size: 96px; font-weight: 700; color: #fff; text-shadow: 0 0 24px rgb(0 0 0 / 70%); font-family: system-ui, sans-serif; }
+.countdown { position: fixed; top: 42%; left: 50%; transform: translate(-50%, -50%); font-size: 96px; font-weight: 700; color: #fff; text-shadow: 0 0 24px rgb(0 0 0 / 70%); font-family: system-ui, sans-serif; }
 ```
 
 - [ ] **Step 5: Verify `index.html` has no leftover dev controls**
