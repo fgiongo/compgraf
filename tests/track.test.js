@@ -55,3 +55,20 @@ test("generateTrack honors checkpointCount and indexes them", () => {
   assert.strictEqual(t.checkpoints.length, 12);
   t.checkpoints.forEach((c, i) => assert.strictEqual(c.index, i));
 });
+
+test("generateTrack produces unit tangents", () => {
+  const t = generateTrack(42);
+  for (const c of t.checkpoints) {
+    const len = Math.hypot(c.tangent.x, c.tangent.z);
+    assert.ok(Math.abs(len - 1) < 1e-6, `checkpoint tangent not unit: ${len}`);
+  }
+});
+
+test("resample yields unit tangent even on a degenerate (repeated point) input", () => {
+  const pts = [{ x: 0, z: 0 }, { x: 0, z: 0 }, { x: 100, z: 0 }, { x: 100, z: 100 }];
+  const poses = resampleClosedCurveByArcLength(pts, 6);
+  for (const p of poses) {
+    const len = Math.hypot(p.tangent.x, p.tangent.z);
+    assert.ok(Math.abs(len - 1) < 1e-6, `tangent not unit: ${len}`);
+  }
+});

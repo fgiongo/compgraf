@@ -50,8 +50,9 @@ function resampleClosedCurveByArcLength(points, count) {
     const position = { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f };
     const tx = b.x - a.x;
     const tz = b.z - a.z;
-    const len = Math.hypot(tx, tz) || 1;
-    poses.push({ position, tangent: { x: tx / len, z: tz / len } });
+    const len = Math.hypot(tx, tz);
+    const tangent = len > 0 ? { x: tx / len, z: tz / len } : { x: 1, z: 0 };
+    poses.push({ position, tangent });
   }
   return poses;
 }
