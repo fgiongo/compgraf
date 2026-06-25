@@ -11,8 +11,16 @@ const Game = {
   chaseCam: null,
   boatParams: null,
 
+  RING_RADIUS: 90,
+  LAPS: 2,
+  CHECKPOINT_COUNT: 20,
+  seed: 1,
+  track: null,
+  race: null,
+
   _accum: 0,
   FIXED_DT: 1 / 120,
+  _prevBoatXZ: null,
 
   setup() {
     this.state = this.STATE.MENU;
@@ -34,7 +42,16 @@ const Game = {
     this.boat = createBoatBody({ x: 0, z: 0, yaw: 0 });
     this.boatParams = DEFAULT_BOAT_PARAMS;
     this.chaseCam = ChaseCamera.create(this.sceneCamera, { distance: 320, height: -150, lookAhead: 140, smoothing: 6 });
+    this.track = generateTrack(this.seed, { checkpointCount: this.CHECKPOINT_COUNT });
+    Rings.setTrack(this.track.checkpoints);
+    this.race = createRaceProgress({ checkpointCount: this.CHECKPOINT_COUNT, laps: this.LAPS, radius: this.RING_RADIUS });
+    // Posiciona o barco no primeiro checkpoint, virado para o segundo.
+    const start = this.track.checkpoints[0];
+    this.boat.pos.x = start.position.x;
+    this.boat.pos.z = start.position.z;
+    this.boat.yaw = Math.atan2(start.tangent.x, start.tangent.z);
     this.chaseCam.snap(this.boat);
+    this._prevBoatXZ = { x: this.boat.pos.x, z: this.boat.pos.z };
     this.setState(this.STATE.RACING);
   },
 
@@ -53,6 +70,10 @@ const Game = {
         this._accum -= this.FIXED_DT;
       }
       this.chaseCam.update(this.boat, dt);
+      const currXZ = { x: this.boat.pos.x, z: this.boat.pos.z };
+      const result = this.race.update(this._prevBoatXZ, currXZ, this.track.checkpoints);
+      this._prevBoatXZ = currXZ;
+      if (result.finished) this.setState(this.STATE.FINISHED);
     }
   },
 
@@ -84,6 +105,7 @@ const Game = {
       };
       drawOcean(oceanArgs);
       drawBoatFromBody(this.boat, scene);
+      Rings.draw(scene, this.race.currentIndex, this.RING_RADIUS);
     }
   },
 };
