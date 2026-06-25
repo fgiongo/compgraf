@@ -22,6 +22,10 @@ const Game = {
   FIXED_DT: 1 / 120,
   _prevBoatXZ: null,
 
+  raceStartMs: 0,
+  lapStartMs: 0,
+  bestLapMs: null,
+
   setup() {
     this.state = this.STATE.MENU;
     Input.setup();
@@ -52,6 +56,10 @@ const Game = {
     this.boat.yaw = Math.atan2(start.tangent.x, start.tangent.z);
     this.chaseCam.snap(this.boat);
     this._prevBoatXZ = { x: this.boat.pos.x, z: this.boat.pos.z };
+    this.raceStartMs = millis();
+    this.lapStartMs = this.raceStartMs;
+    this.bestLapMs = null;
+    Hud.hideAll();
     this.setState(this.STATE.RACING);
   },
 
@@ -71,9 +79,28 @@ const Game = {
       }
       this.chaseCam.update(this.boat, dt);
       const currXZ = { x: this.boat.pos.x, z: this.boat.pos.z };
+      const prevLap = this.race.lap;
       const result = this.race.update(this._prevBoatXZ, currXZ, this.track.checkpoints);
       this._prevBoatXZ = currXZ;
-      if (result.finished) this.setState(this.STATE.FINISHED);
+      if (this.race.lap > prevLap || result.finished) {
+        const lapMs = millis() - this.lapStartMs;
+        if (this.bestLapMs == null || lapMs < this.bestLapMs) this.bestLapMs = lapMs;
+        this.lapStartMs = millis();
+      }
+      if (result.finished) { this.totalMs = millis() - this.raceStartMs; this.setState(this.STATE.FINISHED); }
+      const cp = this.track.checkpoints[this.race.currentIndex];
+      const toCpX = cp.position.x - this.boat.pos.x;
+      const toCpZ = cp.position.z - this.boat.pos.z;
+      // Angulo relativo ao heading do barco -> seta na tela.
+      const rel = Math.atan2(toCpX, toCpZ) - this.boat.yaw;
+      Hud.updateRace({
+        lap: this.race.lap, laps: this.LAPS,
+        checkpoint: this.race.currentIndex, checkpointCount: this.CHECKPOINT_COUNT,
+        elapsedMs: millis() - this.raceStartMs,
+        bestLapMs: this.bestLapMs,
+        speed: Math.hypot(this.boat.vel.x, this.boat.vel.z),
+        arrowAngleRad: rel,
+      });
     }
   },
 
